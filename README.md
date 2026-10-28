@@ -1,6 +1,6 @@
 # Python API Automation Testing
 
-A simple, beginner-friendly API automation project using **Behave (BDD)**, **pytest**, and **miniconda** for package management.
+A simple, beginner-friendly API automation project using **Behave (BDD)** and **requests**, with **miniconda** for package management.
 
 This project tests 4 basic HTTP methods (GET, POST, PUT, PATCH) against the [JSONPlaceholder](https://jsonplaceholder.typicode.com/) public API.
 
@@ -14,12 +14,14 @@ automation_py_api/
 │       └── api_steps.py           # Python step definitions
 ├── test_data.py                   # Test data (URLs, payloads)
 ├── requirements.txt               # Python dependencies
+├── .gitignore                     # Files kept out of version control
 └── README.md                      # This file
 ```
 
 ## Prerequisites
 
 - **Python 3.8+** (via miniconda or anaconda)
+- **Git** (to clone the repository)
 - **Internet connection** (to call the public API)
 
 ## Setup Instructions
@@ -46,8 +48,9 @@ conda activate api_automation
 ### 3. Install Dependencies
 
 ```bash
-# Navigate to the project directory
-cd /Users/muhammad.hassan/code/learn_vibe/automation_py_api
+# Clone the repository and move into it
+git clone https://github.com/alwih/automation-api-py-behave.git
+cd automation-api-py-behave
 
 # Install required packages
 pip install -r requirements.txt
@@ -110,11 +113,12 @@ pip install -r requirements.txt --force-reinstall
 
 ## Next Steps
 
-- Add pytest tests alongside behave
-- Implement environment configs (dev/staging/prod)
-- Add response validation with assertpy
-- Extract common logic into helper functions
-- Add HTML reporting for test results
+- Add a behave config and hooks (shared HTTP session, request timeouts)
+- Expand coverage with negative and edge-case scenarios
+- Extract a reusable API client and assertion helpers
+- Move configuration (URLs, credentials) to environment variables
+- Add JSON Schema contract checks and pytest unit tests for helpers
+- Add Allure/JUnit reporting and a GitHub Actions pipeline
 
 ## Learning Resources
 
