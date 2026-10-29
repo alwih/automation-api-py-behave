@@ -71,3 +71,33 @@ Feature: Reading posts
     When I send a GET request to "/users/11"
     Then the response status code should be 404
     And the response body should be an empty object
+
+  @edge
+  Scenario Outline: Post <post_id> at the id boundary is returned (<note>)
+    When I send a GET request to "/posts/<post_id>"
+    Then the response status code should be 200
+    And the response field "id" should be <post_id>
+
+    Examples:
+      | post_id | note     |
+      | 1       | first id |
+      | 100     | last id  |
+
+  @edge
+  Scenario: Filtering by an author with no posts returns an empty list
+    When I send a GET request to "/posts?userId=999"
+    Then the response status code should be 200
+    And the response body should be an empty list
+
+  @edge
+  Scenario: Paginating posts returns the requested slice and the total count
+    When I send a GET request to "/posts?_page=2&_limit=5"
+    Then the response status code should be 200
+    And the response items should have "id" values 6, 7, 8, 9, 10
+    And the response header "X-Total-Count" should be "100"
+
+  @edge
+  Scenario: Requesting a page past the end returns an empty list
+    When I send a GET request to "/posts?_page=999&_limit=10"
+    Then the response status code should be 200
+    And the response body should be an empty list
