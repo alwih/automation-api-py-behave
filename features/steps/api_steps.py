@@ -1,6 +1,5 @@
-import requests
 from behave import given, when, then
-from test_data import BASE_URL, POST_PAYLOAD, PUT_PAYLOAD, PATCH_PAYLOAD
+from test_data import BASE_URL, REQUEST_TIMEOUT, POST_PAYLOAD, PUT_PAYLOAD, PATCH_PAYLOAD
 
 @given('the API is ready')
 def set_base_url(context):
@@ -9,22 +8,22 @@ def set_base_url(context):
 @when('I send a GET request to "{endpoint}"')
 def send_get_request(context, endpoint):
     url = context.base_url + endpoint
-    context.response = requests.get(url)
+    context.response = context.session.get(url, timeout=REQUEST_TIMEOUT)
 
 @when('I send a POST request to "{endpoint}"')
 def send_post_request(context, endpoint):
     url = context.base_url + endpoint
-    context.response = requests.post(url, json=POST_PAYLOAD)
+    context.response = context.session.post(url, json=POST_PAYLOAD, timeout=REQUEST_TIMEOUT)
 
 @when('I send a PUT request to "{endpoint}"')
 def send_put_request(context, endpoint):
     url = context.base_url + endpoint
-    context.response = requests.put(url, json=PUT_PAYLOAD)
+    context.response = context.session.put(url, json=PUT_PAYLOAD, timeout=REQUEST_TIMEOUT)
 
 @when('I send a PATCH request to "{endpoint}"')
 def send_patch_request(context, endpoint):
     url = context.base_url + endpoint
-    context.response = requests.patch(url, json=PATCH_PAYLOAD)
+    context.response = context.session.patch(url, json=PATCH_PAYLOAD, timeout=REQUEST_TIMEOUT)
 
 @then('the response status code should be {status_code:d}')
 def check_status_code(context, status_code):
