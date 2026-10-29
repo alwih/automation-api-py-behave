@@ -52,3 +52,22 @@ Feature: Reading posts
     When I send a GET request to "/posts/1/comments"
     Then the response status code should be 200
     And the response body should equal the remembered body
+
+  @negative
+  Scenario Outline: Requesting post <post_id> returns 404 (<note>)
+    When I send a GET request to "/posts/<post_id>"
+    Then the response status code should be 404
+    And the response body should be an empty object
+
+    Examples:
+      | post_id | note               |
+      | 0       | below the first id |
+      | 101     | just after last id |
+      | 9999    | far out of range   |
+      | abc     | non-numeric id     |
+
+  @negative
+  Scenario: Requesting a user beyond the last author returns 404
+    When I send a GET request to "/users/11"
+    Then the response status code should be 404
+    And the response body should be an empty object
