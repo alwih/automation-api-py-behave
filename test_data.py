@@ -1,6 +1,7 @@
 # Test data configuration
 
 BASE_URL = "https://jsonplaceholder.typicode.com"
+REQUEST_TIMEOUT = 10  # seconds
 
 # Request payloads
 POST_PAYLOAD = {
