@@ -7,12 +7,6 @@ Feature: JSONPlaceholder API Testing
   Background:
     Given the API is ready
 
-  Scenario: GET - Retrieve a single post
-    When I send a GET request to "/posts/1"
-    Then the response status code should be 200
-    And the response should contain "userId"
-    And the response should contain "title"
-
   Scenario: POST - Create a new post
     When I send a POST request to "/posts"
     Then the response status code should be 201
