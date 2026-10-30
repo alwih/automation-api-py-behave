@@ -31,3 +31,38 @@ Feature: Writing posts
     Then the response status code should be 201
     And the response field "title" should be "Café ☕ 日本語"
     And the response should echo the request body
+
+  @positive
+  Scenario: Replace a post with PUT
+    When I send a PUT request to "/posts/1" with:
+      | field  | value           |
+      | id     | 1               |
+      | title  | Rewritten title |
+      | body   | Rewritten body  |
+      | userId | 1               |
+    Then the response status code should be 200
+    And the response should echo the request body
+
+  @positive
+  Scenario: PATCH changes only the fields that are sent
+    Given I send a GET request to "/posts/1"
+    And I remember the response body
+    When I send a PATCH request to "/posts/1" with:
+      | field | value         |
+      | title | Patched title |
+    Then the response status code should be 200
+    And the response should echo the request body
+    And the response fields "id, userId, body" should match the remembered body
+
+  @edge
+  Scenario: PUT with a partial body replaces the whole post
+    PUT is a full replace, so fields left out of the request are dropped
+    instead of being kept from the stored post.
+
+    When I send a PUT request to "/posts/1" with:
+      | field | value        |
+      | title | Only a title |
+    Then the response status code should be 200
+    And the response should echo the request body
+    And the response should not contain "body"
+    And the response should not contain "userId"
