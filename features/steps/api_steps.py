@@ -1,17 +1,20 @@
 import json
 
-from behave import given, when, then, step
+import parse
+from behave import given, when, then, step, register_type
 from api.client import ApiClient
 from test_data import BASE_URL, REQUEST_TIMEOUT
+
+@parse.with_pattern(r"GET|POST|PUT|PATCH|DELETE")
+def parse_http_method(text):
+    # parse matches custom types case-insensitively; keep the method canonical
+    return text.upper()
+
+register_type(HttpMethod=parse_http_method)
 
 @given('the API is ready')
 def create_client(context):
     context.client = ApiClient(context.session, BASE_URL, REQUEST_TIMEOUT)
-
-@given('I send a GET request to "{endpoint}"')
-@when('I send a GET request to "{endpoint}"')
-def send_get_request(context, endpoint):
-    context.response = context.client.request("GET", endpoint)
 
 def body_from_table(table):
     # Values are JSON literals when they parse (1 -> int, true -> bool), otherwise strings.
@@ -24,25 +27,16 @@ def body_from_table(table):
             body[row["field"]] = row["value"]
     return body
 
-def send_with_table(context, method, endpoint):
+@given('I send a {method:HttpMethod} request to "{endpoint}"')
+@when('I send a {method:HttpMethod} request to "{endpoint}"')
+def send_request(context, method, endpoint):
+    context.response = context.client.request(method, endpoint)
+
+@given('I send a {method:HttpMethod} request to "{endpoint}" with:')
+@when('I send a {method:HttpMethod} request to "{endpoint}" with:')
+def send_request_with_table(context, method, endpoint):
     context.request_body = body_from_table(context.table)
     context.response = context.client.request(method, endpoint, json_body=context.request_body)
-
-@when('I send a POST request to "{endpoint}" with:')
-def send_post_request_with_table(context, endpoint):
-    send_with_table(context, "POST", endpoint)
-
-@when('I send a PUT request to "{endpoint}" with:')
-def send_put_request_with_table(context, endpoint):
-    send_with_table(context, "PUT", endpoint)
-
-@when('I send a PATCH request to "{endpoint}" with:')
-def send_patch_request_with_table(context, endpoint):
-    send_with_table(context, "PATCH", endpoint)
-
-@when('I send a DELETE request to "{endpoint}"')
-def send_delete_request(context, endpoint):
-    context.response = context.client.request("DELETE", endpoint)
 
 @step('I remember the response body')
 def remember_response_body(context):
