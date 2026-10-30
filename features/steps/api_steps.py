@@ -1,7 +1,7 @@
 import json
 
 from behave import given, when, then, step
-from test_data import BASE_URL, REQUEST_TIMEOUT, POST_PAYLOAD, PUT_PAYLOAD, PATCH_PAYLOAD
+from test_data import BASE_URL, REQUEST_TIMEOUT
 
 @given('the API is ready')
 def set_base_url(context):
@@ -12,21 +12,6 @@ def set_base_url(context):
 def send_get_request(context, endpoint):
     url = context.base_url + endpoint
     context.response = context.session.get(url, timeout=REQUEST_TIMEOUT)
-
-@when('I send a POST request to "{endpoint}"')
-def send_post_request(context, endpoint):
-    url = context.base_url + endpoint
-    context.response = context.session.post(url, json=POST_PAYLOAD, timeout=REQUEST_TIMEOUT)
-
-@when('I send a PUT request to "{endpoint}"')
-def send_put_request(context, endpoint):
-    url = context.base_url + endpoint
-    context.response = context.session.put(url, json=PUT_PAYLOAD, timeout=REQUEST_TIMEOUT)
-
-@when('I send a PATCH request to "{endpoint}"')
-def send_patch_request(context, endpoint):
-    url = context.base_url + endpoint
-    context.response = context.session.patch(url, json=PATCH_PAYLOAD, timeout=REQUEST_TIMEOUT)
 
 def body_from_table(table):
     # Values are JSON literals when they parse (1 -> int, true -> bool), otherwise strings.
