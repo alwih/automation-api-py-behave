@@ -66,3 +66,25 @@ Feature: Writing posts
     And the response should echo the request body
     And the response should not contain "body"
     And the response should not contain "userId"
+
+  @positive
+  Scenario: Delete a post
+    When I send a DELETE request to "/posts/1"
+    Then the response status code should be 200
+    And the response body should be an empty object
+
+  @known_issue
+  Scenario Outline: Updating a post that does not exist with <method> returns 404
+    JSONPlaceholder does not check that the post exists before updating it.
+    Actual: PUT returns 500 with an HTML TypeError stack trace, and
+    PATCH returns 200 and echoes the request body.
+
+    When I send a <method> request to "/posts/9999" with:
+      | field | value      |
+      | title | Ghost post |
+    Then the response status code should be 404
+
+    Examples:
+      | method | actual                       |
+      | PUT    | 500 with an HTML stack trace |
+      | PATCH  | 200 echoing the request body |
