@@ -1,17 +1,17 @@
 import json
 
 from behave import given, when, then, step
+from api.client import ApiClient
 from test_data import BASE_URL, REQUEST_TIMEOUT
 
 @given('the API is ready')
-def set_base_url(context):
-    context.base_url = BASE_URL
+def create_client(context):
+    context.client = ApiClient(context.session, BASE_URL, REQUEST_TIMEOUT)
 
 @given('I send a GET request to "{endpoint}"')
 @when('I send a GET request to "{endpoint}"')
 def send_get_request(context, endpoint):
-    url = context.base_url + endpoint
-    context.response = context.session.get(url, timeout=REQUEST_TIMEOUT)
+    context.response = context.client.request("GET", endpoint)
 
 def body_from_table(table):
     # Values are JSON literals when they parse (1 -> int, true -> bool), otherwise strings.
@@ -26,12 +26,7 @@ def body_from_table(table):
 
 def send_with_table(context, method, endpoint):
     context.request_body = body_from_table(context.table)
-    # requests' json= escapes non-ASCII as \uXXXX; send real UTF-8 bytes instead
-    data = json.dumps(context.request_body, ensure_ascii=False).encode("utf-8")
-    context.response = context.session.request(
-        method, context.base_url + endpoint, data=data,
-        headers={"Content-Type": "application/json; charset=utf-8"},
-        timeout=REQUEST_TIMEOUT)
+    context.response = context.client.request(method, endpoint, json_body=context.request_body)
 
 @when('I send a POST request to "{endpoint}" with:')
 def send_post_request_with_table(context, endpoint):
@@ -47,8 +42,7 @@ def send_patch_request_with_table(context, endpoint):
 
 @when('I send a DELETE request to "{endpoint}"')
 def send_delete_request(context, endpoint):
-    url = context.base_url + endpoint
-    context.response = context.session.delete(url, timeout=REQUEST_TIMEOUT)
+    context.response = context.client.request("DELETE", endpoint)
 
 @step('I remember the response body')
 def remember_response_body(context):
