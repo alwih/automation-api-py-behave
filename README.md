@@ -8,13 +8,17 @@ It tests the posts endpoints of the [JSONPlaceholder](https://jsonplaceholder.ty
 
 ```
 automation_py_api/
+├── api/
+│   ├── client.py                  # ApiClient: base URL, timeout, JSON bodies sent as UTF-8
+│   └── assertions.py              # Response checks with dotted-path field access
 ├── features/
 │   ├── jsonplaceholder/
 │   │   ├── posts_read.feature     # GET scenarios for posts and comments
-│   │   └── posts_write.feature    # POST, PUT, PATCH, DELETE scenarios
-│   ├── environment.py             # Hooks: opens/closes an HTTP session per scenario
+│   │   ├── posts_write.feature    # POST, PUT, PATCH, DELETE scenarios
+│   │   └── users.feature          # Nested user fields (address, company)
+│   ├── environment.py             # Hooks: HTTP session per scenario, logs the response when a step fails
 │   └── steps/
-│       └── api_steps.py           # Python step definitions
+│       └── api_steps.py           # Step definitions (thin wrappers over api/)
 ├── test_data.py                   # Base URL and request timeout
 ├── behave.ini                     # Behave defaults (paths, format, default tag filter)
 ├── environment.yml                # Conda environment (Python 3.11 + requirements)
@@ -23,7 +27,9 @@ automation_py_api/
 └── README.md                      # This file
 ```
 
-Every scenario gets its own `requests.Session` (created in `before_scenario`, closed in `after_scenario`) with an `Accept: application/json` header, and every request uses an explicit timeout so a slow API fails the test instead of hanging the run.
+Every scenario gets its own `requests.Session` (created in `before_scenario`, closed in `after_scenario`) with an `Accept: application/json` header. The `Given the API is ready` step wraps that session in an `ApiClient`, which adds the base URL and an explicit timeout, so a slow API fails the test instead of hanging the run.
+
+Step definitions stay small: one step sends any method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, matched by a custom `HttpMethod` type), and the `Then` steps call functions in `api/assertions.py`. Field names in those steps are dotted paths, so `address.geo.lat` reaches into nested objects and `products.0.id` indexes a list.
 
 ## Prerequisites
 
@@ -130,7 +136,7 @@ behave --tags=@smoke --show-skipped
 
 ## What Gets Tested
 
-**Reading posts** ([posts_read.feature](features/jsonplaceholder/posts_read.feature)) - 17 scenarios, counting each Examples row:
+**Reading posts** ([posts_read.feature](features/jsonplaceholder/posts_read.feature)) - 16 scenarios, counting each Examples row:
 
 | Type | Request | Checks |
 |---|---|---|
@@ -140,7 +146,6 @@ behave --tags=@smoke --show-skipped
 | Positive | `GET /posts/1/comments` | 5 comments, all for post 1, every email contains `@` |
 | Positive | `/posts/1/comments` vs `/comments?postId=1` | Both routes return the same body |
 | Negative | `GET /posts/0`, `101`, `9999`, `abc` | 404 with an empty object |
-| Negative | `GET /users/11` | 404 with an empty object |
 | Edge | `GET /posts/1`, `/posts/100` | First and last ids return 200 |
 | Edge | `GET /posts?userId=999` | 200 with an empty list, not a 404 |
 | Edge | `GET /posts?_page=2&_limit=5` | Ids 6-10 and header `X-Total-Count: 100` |
@@ -158,7 +163,15 @@ behave --tags=@smoke --show-skipped
 | Edge | `PUT /posts/1` with only a title | `body` and `userId` are gone (PUT replaces, PATCH merges) |
 | Known issue | `PUT` / `PATCH /posts/9999` | Should be 404. Actual: PUT returns 500 with an HTML stack trace, PATCH returns 200 |
 
-Every scenario shares a `Background` step that sets the base URL.
+**Reading users** ([users.feature](features/jsonplaceholder/users.feature)) - 3 scenarios:
+
+| Type | Request | Checks |
+|---|---|---|
+| Positive | `GET /users/1` | `address.city`, `address.geo.lat` (`"-37.3159"`), `address.geo.lng`, non-empty `company.name` |
+| Positive | `GET /users` | 10 users, each with `address.geo.lat`, `address.geo.lng`, `company.name` |
+| Negative | `GET /users/11` | 404 with an empty object |
+
+Every scenario shares a `Background` step that sets up the API client.
 
 ## Modifying Test Data
 
@@ -167,7 +180,7 @@ Every scenario shares a `Background` step that sets the base URL.
 - `BASE_URL` - The API endpoint
 - `REQUEST_TIMEOUT` - Seconds to wait for each request before failing (default `10`)
 
-Request bodies live next to the scenario that sends them, as a data table:
+Request bodies live next to the scenario that sends them, as a data table. The same step works for `POST`, `PUT` and `PATCH`:
 
 ```gherkin
 When I send a POST request to "/posts" with:
@@ -193,8 +206,14 @@ conda activate api_automation
 pip install -r requirements.txt --force-reinstall
 ```
 
-**`ModuleNotFoundError: No module named 'test_data'`?**
+**`ModuleNotFoundError: No module named 'test_data'` (or `'api'`)?**
 - Run `behave` from the repository root, not from inside `features/`
+
+**Editor says `parse` or `register_type` can't be resolved?**
+- The editor is using a different Python. Point it at the `api_automation` environment (VS Code: *Python: Select Interpreter*). `parse` is installed with behave.
+
+**Reading a failure**
+- When a step fails, the log line above the error shows the last request and response, e.g. `LOG_ERROR:api: PUT https://jsonplaceholder.typicode.com/posts/9999 -> 500`, followed by the first 500 characters of the body.
 
 **Dependency install fails on an older environment?**
 - `requests` 2.34 needs Python 3.10+. Recreate the environment:
@@ -216,7 +235,6 @@ conda env create -f environment.yml
 
 ## Next Steps
 
-- Extract a reusable API client and assertion helpers
 - Move configuration (URLs, credentials) to environment variables
 - Add JSON Schema contract checks and pytest unit tests for helpers
 - Add Allure/JUnit reporting and a GitHub Actions pipeline
@@ -228,6 +246,7 @@ conda env create -f environment.yml
 - [Behave Tag Expressions](https://behave.readthedocs.io/en/latest/tag_expressions/)
 - [Behave Gherkin: Background, Scenario Outlines, Tags](https://behave.readthedocs.io/en/latest/gherkin/)
 - [Behave Step Data (tables)](https://behave.readthedocs.io/en/latest/gherkin/#step-data)
+- [Behave `register_type` (custom step parameter types)](https://behave.readthedocs.io/en/latest/api/#behave.register_type)
 - [MDN: PUT](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/PUT) and [PATCH](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/PATCH)
 - [Requests Sessions and Timeouts](https://requests.readthedocs.io/en/latest/user/advanced/#session-objects)
 - [Requests Library](https://requests.readthedocs.io/)
