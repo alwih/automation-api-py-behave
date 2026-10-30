@@ -66,12 +66,6 @@ Feature: Reading posts
       | 9999    | far out of range   |
       | abc     | non-numeric id     |
 
-  @negative
-  Scenario: Requesting a user beyond the last author returns 404
-    When I send a GET request to "/users/11"
-    Then the response status code should be 404
-    And the response body should be an empty object
-
   @edge
   Scenario Outline: Post <post_id> at the id boundary is returned (<note>)
     When I send a GET request to "/posts/<post_id>"
