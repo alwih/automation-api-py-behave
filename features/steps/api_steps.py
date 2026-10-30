@@ -31,12 +31,14 @@ def body_from_table(table):
 @given('I send a {method:HttpMethod} request to "{endpoint}"')
 @when('I send a {method:HttpMethod} request to "{endpoint}"')
 def send_request(context, method, endpoint):
+    context.response = None  # so a request that raises doesn't leave the previous response behind
     context.response = context.client.request(method, endpoint)
 
 @given('I send a {method:HttpMethod} request to "{endpoint}" with:')
 @when('I send a {method:HttpMethod} request to "{endpoint}" with:')
 def send_request_with_table(context, method, endpoint):
     context.request_body = body_from_table(context.table)
+    context.response = None
     context.response = context.client.request(method, endpoint, json_body=context.request_body)
 
 @step('I remember the response body')
