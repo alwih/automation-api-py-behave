@@ -2,7 +2,7 @@
 
 A simple, beginner-friendly API automation project using **Behave (BDD)** and **requests**, with **miniconda** for package management.
 
-It tests the posts endpoints of the [JSONPlaceholder](https://jsonplaceholder.typicode.com/) public API: reading posts with positive, negative and edge-case scenarios, plus basic smoke checks for POST, PUT and PATCH.
+It tests the posts endpoints of the [JSONPlaceholder](https://jsonplaceholder.typicode.com/) public API (read, create, update, delete) with positive, negative and edge-case scenarios, and records the API's known bugs as scenarios that are skipped by default.
 
 ## Project Structure
 
@@ -10,13 +10,13 @@ It tests the posts endpoints of the [JSONPlaceholder](https://jsonplaceholder.ty
 automation_py_api/
 ├── features/
 │   ├── jsonplaceholder/
-│   │   └── posts_read.feature     # GET scenarios for posts and comments
-│   ├── api_testing.feature        # Smoke scenarios for POST, PUT, PATCH
+│   │   ├── posts_read.feature     # GET scenarios for posts and comments
+│   │   └── posts_write.feature    # POST, PUT, PATCH, DELETE scenarios
 │   ├── environment.py             # Hooks: opens/closes an HTTP session per scenario
 │   └── steps/
 │       └── api_steps.py           # Python step definitions
-├── test_data.py                   # Test data (URL, timeout, payloads)
-├── behave.ini                     # Behave defaults (feature paths, output format)
+├── test_data.py                   # Base URL and request timeout
+├── behave.ini                     # Behave defaults (paths, format, default tag filter)
 ├── environment.yml                # Conda environment (Python 3.11 + requirements)
 ├── requirements.txt               # Python dependencies (pinned)
 ├── .gitignore                     # Files kept out of version control
@@ -96,23 +96,33 @@ Run from the repository root. `behave.ini` points behave at `features/` and uses
 
 | Tag | Meaning |
 |---|---|
-| `@smoke` | Fast check that each HTTP method works |
+| `@smoke` | Fast health check: one read, one write |
 | `@regression` | Full coverage of an area |
 | `@positive` / `@negative` / `@edge` | Scenario intent: happy path, expected errors, boundaries |
+| `@known_issue` | Asserts the correct behavior for a known API bug, so it fails today |
+| `@wip` | Work in progress |
 | `@jsonplaceholder` | Scenarios that hit JSONPlaceholder |
 
+Plain `behave` skips `@known_issue` and `@wip` (set by `default_tags` in `behave.ini`). A `--tags` option on the command line **replaces** that default instead of adding to it, so add `{config.tags}` to keep the known issues out:
+
 ```bash
-# Quick check of each HTTP method
+# Quick health check
 behave --tags=@smoke
+
+# Full regression, still skipping known issues and work in progress
+behave --tags="@regression and {config.tags}"
+
+# Run only the known issues; they fail with the actual behavior described in each scenario
+behave --tags=@known_issue
 
 # Only the error cases
 behave --tags=@negative
 
 # Everything except edge cases
-behave --tags="not @edge"
+behave --tags="not @edge and {config.tags}"
 
 # A single feature file
-behave features/jsonplaceholder/posts_read.feature
+behave features/jsonplaceholder/posts_write.feature
 
 # Show scenarios skipped by a tag filter (hidden by default in behave.ini)
 behave --tags=@smoke --show-skipped
@@ -136,27 +146,39 @@ behave --tags=@smoke --show-skipped
 | Edge | `GET /posts?_page=2&_limit=5` | Ids 6-10 and header `X-Total-Count: 100` |
 | Edge | `GET /posts?_page=999&_limit=10` | 200 with an empty list |
 
-**Writing posts** ([api_testing.feature](features/api_testing.feature)) - 3 `@smoke` scenarios:
+**Writing posts** ([posts_write.feature](features/jsonplaceholder/posts_write.feature)) - 8 scenarios. JSONPlaceholder fakes writes, so the checks cover what the response says, not what is stored:
 
-1. **POST** `/posts` - Creates a new post and verifies an ID is returned
-2. **PUT** `/posts/1` - Updates an entire post and verifies the title changed
-3. **PATCH** `/posts/1` - Partially updates a post (title only) and verifies the change
+| Type | Request | Checks |
+|---|---|---|
+| Positive | `POST /posts` | 201, echoes every field sent, new `id` is an integer above 100 |
+| Positive | `PUT /posts/1` with every field | 200, echoes every field sent |
+| Positive | `GET /posts/1`, then `PATCH /posts/1` with a new title | 200, title changed, `id`, `userId`, `body` unchanged from the GET |
+| Positive | `DELETE /posts/1` | 200 with an empty object |
+| Edge | `POST /posts` with title `Café ☕ 日本語` | Text sent as raw UTF-8 comes back unchanged |
+| Edge | `PUT /posts/1` with only a title | `body` and `userId` are gone (PUT replaces, PATCH merges) |
+| Known issue | `PUT` / `PATCH /posts/9999` | Should be 404. Actual: PUT returns 500 with an HTML stack trace, PATCH returns 200 |
 
 Every scenario shares a `Background` step that sets the base URL.
 
 ## Modifying Test Data
 
-All test data is centralized in [test_data.py](test_data.py):
+[test_data.py](test_data.py) holds the shared settings:
 
 - `BASE_URL` - The API endpoint
 - `REQUEST_TIMEOUT` - Seconds to wait for each request before failing (default `10`)
-- `POST_PAYLOAD` - Data sent in POST requests
-- `PUT_PAYLOAD` - Data sent in PUT requests
-- `PATCH_PAYLOAD` - Data sent in PATCH requests
 
-Edit this file to test different data without touching the feature files or step definitions.
+Request bodies live next to the scenario that sends them, as a data table:
 
-The read scenarios keep their inputs in the feature file instead. To try another id or user, add a row to the matching `Examples:` table in [posts_read.feature](features/jsonplaceholder/posts_read.feature); the `note` column says why the row is there and shows up in the scenario name.
+```gherkin
+When I send a POST request to "/posts" with:
+  | field  | value                |
+  | title  | Weekly release notes |
+  | userId | 1                    |
+```
+
+Values are read as JSON when they parse, so `1` is sent as a number and `true` as a boolean; anything else, like `Weekly release notes`, is sent as a string. Wrap a value in double quotes (`"1"`) to send it as a string.
+
+The read scenarios keep their inputs in the feature file too. To try another id or user, add a row to the matching `Examples:` table in [posts_read.feature](features/jsonplaceholder/posts_read.feature); the `note` column says why the row is there and shows up in the scenario name.
 
 ## Troubleshooting
 
@@ -186,12 +208,14 @@ conda env create -f environment.yml
 - Check if https://jsonplaceholder.typicode.com/ is accessible in your browser
 - `ConnectTimeout` / `ReadTimeout` errors mean the API didn't answer within `REQUEST_TIMEOUT`; raise it in `test_data.py` on a slow network
 
+**`behave --tags=@regression` fails on `/posts/9999`?**
+- Those are `@known_issue` scenarios. Command-line tags replace the default filter, so use `behave --tags="@regression and {config.tags}"`.
+
 **`Expected a non-empty list but got: []`?**
 - "Every item in the response..." steps refuse to pass on an empty list, so a filter that matches nothing is reported instead of passing silently. Check the query string in the scenario.
 
 ## Next Steps
 
-- Expand write coverage (data tables, PUT vs PATCH semantics, known issues)
 - Extract a reusable API client and assertion helpers
 - Move configuration (URLs, credentials) to environment variables
 - Add JSON Schema contract checks and pytest unit tests for helpers
@@ -203,6 +227,8 @@ conda env create -f environment.yml
 - [Behave Configuration Files](https://behave.readthedocs.io/en/latest/behave/#configuration-files)
 - [Behave Tag Expressions](https://behave.readthedocs.io/en/latest/tag_expressions/)
 - [Behave Gherkin: Background, Scenario Outlines, Tags](https://behave.readthedocs.io/en/latest/gherkin/)
+- [Behave Step Data (tables)](https://behave.readthedocs.io/en/latest/gherkin/#step-data)
+- [MDN: PUT](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/PUT) and [PATCH](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/PATCH)
 - [Requests Sessions and Timeouts](https://requests.readthedocs.io/en/latest/user/advanced/#session-objects)
 - [Requests Library](https://requests.readthedocs.io/)
 - [JSONPlaceholder API Guide](https://jsonplaceholder.typicode.com/guide/)

@@ -1,5 +1,7 @@
+import json
+
 from behave import given, when, then, step
-from test_data import BASE_URL, REQUEST_TIMEOUT, POST_PAYLOAD, PUT_PAYLOAD, PATCH_PAYLOAD
+from test_data import BASE_URL, REQUEST_TIMEOUT
 
 @given('the API is ready')
 def set_base_url(context):
@@ -11,20 +13,42 @@ def send_get_request(context, endpoint):
     url = context.base_url + endpoint
     context.response = context.session.get(url, timeout=REQUEST_TIMEOUT)
 
-@when('I send a POST request to "{endpoint}"')
-def send_post_request(context, endpoint):
-    url = context.base_url + endpoint
-    context.response = context.session.post(url, json=POST_PAYLOAD, timeout=REQUEST_TIMEOUT)
+def body_from_table(table):
+    # Values are JSON literals when they parse (1 -> int, true -> bool), otherwise strings.
+    # Quote a value ("1") to send it as a string.
+    body = {}
+    for row in table:
+        try:
+            body[row["field"]] = json.loads(row["value"])
+        except ValueError:
+            body[row["field"]] = row["value"]
+    return body
 
-@when('I send a PUT request to "{endpoint}"')
-def send_put_request(context, endpoint):
-    url = context.base_url + endpoint
-    context.response = context.session.put(url, json=PUT_PAYLOAD, timeout=REQUEST_TIMEOUT)
+def send_with_table(context, method, endpoint):
+    context.request_body = body_from_table(context.table)
+    # requests' json= escapes non-ASCII as \uXXXX; send real UTF-8 bytes instead
+    data = json.dumps(context.request_body, ensure_ascii=False).encode("utf-8")
+    context.response = context.session.request(
+        method, context.base_url + endpoint, data=data,
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        timeout=REQUEST_TIMEOUT)
 
-@when('I send a PATCH request to "{endpoint}"')
-def send_patch_request(context, endpoint):
+@when('I send a POST request to "{endpoint}" with:')
+def send_post_request_with_table(context, endpoint):
+    send_with_table(context, "POST", endpoint)
+
+@when('I send a PUT request to "{endpoint}" with:')
+def send_put_request_with_table(context, endpoint):
+    send_with_table(context, "PUT", endpoint)
+
+@when('I send a PATCH request to "{endpoint}" with:')
+def send_patch_request_with_table(context, endpoint):
+    send_with_table(context, "PATCH", endpoint)
+
+@when('I send a DELETE request to "{endpoint}"')
+def send_delete_request(context, endpoint):
     url = context.base_url + endpoint
-    context.response = context.session.patch(url, json=PATCH_PAYLOAD, timeout=REQUEST_TIMEOUT)
+    context.response = context.session.delete(url, timeout=REQUEST_TIMEOUT)
 
 @step('I remember the response body')
 def remember_response_body(context):
@@ -129,3 +153,30 @@ def check_body_equals_remembered(context):
     response_json = context.response.json()
     assert response_json == context.remembered_body, \
         f"Expected {context.remembered_body} but got: {response_json}"
+
+@then('the response fields "{fields}" should match the remembered body')
+def check_fields_match_remembered(context, fields):
+    response_json = context.response.json()
+    for name in (field.strip() for field in fields.split(",")):
+        assert name in response_json and name in context.remembered_body, \
+            f"'{name}' missing from response {response_json} or remembered body {context.remembered_body}"
+        assert response_json[name] == context.remembered_body[name], \
+            f"Expected {name} == {context.remembered_body[name]!r} but got {response_json[name]!r}"
+
+@then('the response should echo the request body')
+def check_echoes_request_body(context):
+    response_json = context.response.json()
+    for field, value in context.request_body.items():
+        assert field in response_json and response_json[field] == value, \
+            f"Expected {field} == {value!r} but got: {response_json}"
+
+@then('the response should not contain "{field}"')
+def check_field_absent(context, field):
+    response_json = context.response.json()
+    assert field not in response_json, \
+        f"Field '{field}' should not be in response: {response_json}"
+
+@then('the response field "{field}" should be greater than {value:d}')
+def check_field_greater_than(context, field, value):
+    actual = context.response.json()[field]
+    assert actual > value, f"Expected {field} > {value} but got {actual!r}"
