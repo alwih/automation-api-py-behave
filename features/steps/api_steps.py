@@ -3,7 +3,6 @@ import json
 import parse
 from behave import given, when, then, step, register_type
 from api import assertions
-from api.client import ApiClient
 
 @parse.with_pattern(r"GET|POST|PUT|PATCH|DELETE")
 def parse_http_method(text):
@@ -12,10 +11,11 @@ def parse_http_method(text):
 
 register_type(HttpMethod=parse_http_method)
 
-@given('the API is ready')
-def create_client(context):
-    settings = context.settings
-    context.client = ApiClient(context.session, settings.jsonplaceholder_base_url, settings.request_timeout)
+@given('the {service} API is available')
+def use_service(context, service):
+    assert service.lower() in context.clients, \
+        f"Unknown service '{service}', expected one of {sorted(context.clients)}"
+    context.client = context.clients[service.lower()]
 
 def body_from_table(table):
     # Values are JSON literals when they parse (1 -> int, true -> bool), otherwise strings.

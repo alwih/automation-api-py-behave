@@ -5,7 +5,7 @@ Feature: Reading users
   So that I can rely on the shape of a user record
 
   Background:
-    Given the API is ready
+    Given the JSONPlaceholder API is available
 
   @positive
   Scenario: Get a user with nested address and company
