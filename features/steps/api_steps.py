@@ -4,7 +4,6 @@ import parse
 from behave import given, when, then, step, register_type
 from api import assertions
 from api.client import ApiClient
-from test_data import BASE_URL, REQUEST_TIMEOUT
 
 @parse.with_pattern(r"GET|POST|PUT|PATCH|DELETE")
 def parse_http_method(text):
@@ -15,7 +14,8 @@ register_type(HttpMethod=parse_http_method)
 
 @given('the API is ready')
 def create_client(context):
-    context.client = ApiClient(context.session, BASE_URL, REQUEST_TIMEOUT)
+    settings = context.settings
+    context.client = ApiClient(context.session, settings.jsonplaceholder_base_url, settings.request_timeout)
 
 def body_from_table(table):
     # Values are JSON literals when they parse (1 -> int, true -> bool), otherwise strings.

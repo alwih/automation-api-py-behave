@@ -2,8 +2,15 @@ import logging
 
 import requests
 
+from config.settings import load_settings
+
 log = logging.getLogger("api")
 BODY_LOG_LIMIT = 500  # characters of the response body to show for a failed step
+
+
+def before_all(context):
+    # Read once and fail fast on bad config, before any request is sent
+    context.settings = load_settings(context.config.userdata)
 
 
 def before_scenario(context, scenario):
