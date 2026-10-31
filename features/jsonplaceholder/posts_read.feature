@@ -5,7 +5,7 @@ Feature: Reading posts
   So that I can trust what the posts endpoints return
 
   Background:
-    Given the API is ready
+    Given the JSONPlaceholder API is available
 
   @smoke @positive
   Scenario: Get a single post by id

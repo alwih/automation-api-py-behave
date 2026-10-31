@@ -11,15 +11,17 @@ automation_py_api/
 ├── api/
 │   ├── client.py                  # ApiClient: base URL, timeout, JSON bodies sent as UTF-8
 │   └── assertions.py              # Response checks with dotted-path field access
+├── config/
+│   └── settings.py                # Base URLs, timeout and credentials from -D / env / .env / defaults
 ├── features/
 │   ├── jsonplaceholder/
 │   │   ├── posts_read.feature     # GET scenarios for posts and comments
 │   │   ├── posts_write.feature    # POST, PUT, PATCH, DELETE scenarios
 │   │   └── users.feature          # Nested user fields (address, company)
-│   ├── environment.py             # Hooks: HTTP session per scenario, logs the response when a step fails
+│   ├── environment.py             # Hooks: load settings, one client per API, log the response when a step fails
 │   └── steps/
 │       └── api_steps.py           # Step definitions (thin wrappers over api/)
-├── test_data.py                   # Base URL and request timeout
+├── .env.example                   # Template for a local .env (copy and edit)
 ├── behave.ini                     # Behave defaults (paths, format, default tag filter)
 ├── environment.yml                # Conda environment (Python 3.11 + requirements)
 ├── requirements.txt               # Python dependencies (pinned)
@@ -27,7 +29,7 @@ automation_py_api/
 └── README.md                      # This file
 ```
 
-Every scenario gets its own `requests.Session` (created in `before_scenario`, closed in `after_scenario`) with an `Accept: application/json` header. The `Given the API is ready` step wraps that session in an `ApiClient`, which adds the base URL and an explicit timeout, so a slow API fails the test instead of hanging the run.
+Settings are read once in `before_all`. Every scenario then gets its own `requests.Session` (closed in `after_scenario`) with an `Accept: application/json` header, and one `ApiClient` per API on top of it: JSONPlaceholder and DummyJSON. Each client adds its base URL and an explicit timeout, so a slow API fails the test instead of hanging the run. A feature picks its API in the `Background`, e.g. `Given the JSONPlaceholder API is available`.
 
 Step definitions stay small: one step sends any method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, matched by a custom `HttpMethod` type), and the `Then` steps call functions in `api/assertions.py`. Field names in those steps are dotted paths, so `address.geo.lat` reaches into nested objects and `products.0.id` indexes a list.
 
@@ -171,14 +173,42 @@ behave --tags=@smoke --show-skipped
 | Positive | `GET /users` | 10 users, each with `address.geo.lat`, `address.geo.lng`, `company.name` |
 | Negative | `GET /users/11` | 404 with an empty object |
 
-Every scenario shares a `Background` step that sets up the API client.
+Every scenario shares a `Background` step that selects the JSONPlaceholder client.
 
 ## Modifying Test Data
 
-[test_data.py](test_data.py) holds the shared settings:
+Settings live in [config/settings.py](config/settings.py). Each one is taken from the first place that sets it:
 
-- `BASE_URL` - The API endpoint
-- `REQUEST_TIMEOUT` - Seconds to wait for each request before failing (default `10`)
+1. `behave -D NAME=value` on the command line
+2. An environment variable
+3. A `.env` file in the repository root
+4. The default below
+
+| Setting | Default | Used for |
+|---|---|---|
+| `JSONPLACEHOLDER_BASE_URL` | `https://jsonplaceholder.typicode.com` | JSONPlaceholder client |
+| `DUMMYJSON_BASE_URL` | `https://dummyjson.com` | DummyJSON client |
+| `REQUEST_TIMEOUT` | `10` | Seconds to wait for each request before failing |
+| `DUMMYJSON_USERNAME` | none | DummyJSON login |
+| `DUMMYJSON_PASSWORD` | none | DummyJSON login |
+
+The credentials have no default on purpose. To use the public DummyJSON demo account, copy the template; `.env` is git-ignored:
+
+```bash
+cp .env.example .env
+```
+
+One-off overrides don't need a file:
+
+```bash
+# Give a slow network more time
+behave -D REQUEST_TIMEOUT=30
+
+# Same thing with an environment variable
+REQUEST_TIMEOUT=30 behave
+```
+
+There are no separate dev or staging environments: both APIs are public, so the defaults point at the real endpoints.
 
 Request bodies live next to the scenario that sends them, as a data table. The same step works for `POST`, `PUT` and `PATCH`:
 
@@ -206,7 +236,7 @@ conda activate api_automation
 pip install -r requirements.txt --force-reinstall
 ```
 
-**`ModuleNotFoundError: No module named 'test_data'` (or `'api'`)?**
+**`ModuleNotFoundError: No module named 'config'` (or `'api'`)?**
 - Run `behave` from the repository root, not from inside `features/`
 
 **Editor says `parse` or `register_type` can't be resolved?**
@@ -225,7 +255,10 @@ conda env create -f environment.yml
 **Tests failing?**
 - Verify internet connection
 - Check if https://jsonplaceholder.typicode.com/ is accessible in your browser
-- `ConnectTimeout` / `ReadTimeout` errors mean the API didn't answer within `REQUEST_TIMEOUT`; raise it in `test_data.py` on a slow network
+- `ConnectTimeout` / `ReadTimeout` errors mean the API didn't answer within `REQUEST_TIMEOUT`; raise it on a slow network, e.g. `behave -D REQUEST_TIMEOUT=30`
+
+**`HOOK-ERROR in before_all: ValueError: REQUEST_TIMEOUT ...`?**
+- The timeout must be a number of seconds greater than 0. Check the `-D` option, your environment variables and `.env`, in that order.
 
 **`behave --tags=@regression` fails on `/posts/9999`?**
 - Those are `@known_issue` scenarios. Command-line tags replace the default filter, so use `behave --tags="@regression and {config.tags}"`.
@@ -235,7 +268,6 @@ conda env create -f environment.yml
 
 ## Next Steps
 
-- Move configuration (URLs, credentials) to environment variables
 - Add JSON Schema contract checks and pytest unit tests for helpers
 - Add Allure/JUnit reporting and a GitHub Actions pipeline
 
@@ -250,4 +282,6 @@ conda env create -f environment.yml
 - [MDN: PUT](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/PUT) and [PATCH](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/PATCH)
 - [Requests Sessions and Timeouts](https://requests.readthedocs.io/en/latest/user/advanced/#session-objects)
 - [Requests Library](https://requests.readthedocs.io/)
+- [python-dotenv](https://saurabh-kumar.com/python-dotenv/)
+- [Behave userdata (`-D NAME=value`)](https://behave.readthedocs.io/en/latest/new_and_noteworthy_v1.2.5/#userdata)
 - [JSONPlaceholder API Guide](https://jsonplaceholder.typicode.com/guide/)

@@ -7,7 +7,7 @@ Feature: Writing posts
   JSONPlaceholder fakes writes: the responses look real, but nothing is stored.
 
   Background:
-    Given the API is ready
+    Given the JSONPlaceholder API is available
 
   @smoke @positive
   Scenario: Create a post
