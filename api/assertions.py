@@ -3,6 +3,7 @@
 Field paths are dotted: "address.geo.lat" walks nested objects, and a
 numeric part indexes a list, so "products.0.id" is the first product's id.
 """
+from datetime import datetime
 
 
 def get_path(data, path):
@@ -79,6 +80,27 @@ def assert_field_is_non_empty_string(body, path):
 def assert_field_greater_than(body, path, minimum):
     actual = field(body, path)
     assert actual > minimum, f"Expected {path} > {minimum} but got {actual!r}"
+
+
+def assert_field_is_boolean(body, path, expected):
+    actual = field(body, path)
+    # Identity, so 1 and 0 don't pass as true and false
+    assert actual is expected, f"Expected {path} to be {expected} but got {actual!r}"
+
+
+def assert_field_is_iso_timestamp(body, path):
+    value = field(body, path)
+    try:
+        # fromisoformat only accepts a trailing "Z" from Python 3.11 on
+        valid = isinstance(value, str) and "T" in value and bool(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    except ValueError:
+        valid = False
+    assert valid, f"Expected '{path}' to be an ISO 8601 timestamp but got {value!r}"
+
+
+def assert_fields_equal(body, path, other_path):
+    actual, other = field(body, path), field(body, other_path)
+    assert actual == other, f"Expected {path} ({actual!r}) to equal {other_path} ({other!r})"
 
 
 def assert_body_equals(body, expected):

@@ -1,4 +1,5 @@
 import json
+import re
 
 import parse
 from behave import given, when, then, step, register_type
@@ -18,7 +19,20 @@ def parse_item_list(text):
 def parse_sort_direction(text):
     return text.lower()
 
-register_type(HttpMethod=parse_http_method, ItemList=parse_item_list, SortDirection=parse_sort_direction)
+@parse.with_pattern(r"true|false")
+def parse_boolean(text):
+    return text.lower() == "true"
+
+register_type(HttpMethod=parse_http_method, ItemList=parse_item_list,
+              SortDirection=parse_sort_direction, Boolean=parse_boolean)
+
+def resolve(context, text):
+    # "{name}" is replaced by a value saved earlier in the scenario
+    def saved_value(match):
+        name = match.group(1)
+        assert name in context.saved, f"Nothing saved as '{name}' yet; saved: {sorted(context.saved)}"
+        return str(context.saved[name])
+    return re.sub(r"\{(\w+)\}", saved_value, text)
 
 @given('the {service} API is available')
 def use_service(context, service):
@@ -41,18 +55,22 @@ def body_from_table(table):
 @when('I send a {method:HttpMethod} request to "{endpoint}"')
 def send_request(context, method, endpoint):
     context.response = None  # so a request that raises doesn't leave the previous response behind
-    context.response = context.client.request(method, endpoint)
+    context.response = context.client.request(method, resolve(context, endpoint))
 
 @given('I send a {method:HttpMethod} request to "{endpoint}" with:')
 @when('I send a {method:HttpMethod} request to "{endpoint}" with:')
 def send_request_with_table(context, method, endpoint):
     context.request_body = body_from_table(context.table)
     context.response = None
-    context.response = context.client.request(method, endpoint, json_body=context.request_body)
+    context.response = context.client.request(method, resolve(context, endpoint), json_body=context.request_body)
 
 @step('I remember the response body')
 def remember_response_body(context):
     context.remembered_body = context.response.json()
+
+@step('I save the response field "{field}" plus {offset:d} as "{name}"')
+def save_field_plus(context, field, offset, name):
+    context.saved[name] = assertions.field(context.response.json(), field) + offset
 
 def split_list(text):
     return [part.strip() for part in text.split(",")]
@@ -69,13 +87,30 @@ def check_status_code(context, status_code):
 def check_field_exists(context, field):
     assertions.assert_has_field(context.response.json(), field)
 
+@then('the response should contain the fields "{fields}"')
+def check_fields_exist(context, fields):
+    for field in split_list(fields):
+        assertions.assert_has_field(context.response.json(), field)
+
 @then('the response should not contain "{field}"')
 def check_field_absent(context, field):
     assertions.assert_lacks_field(context.response.json(), field)
 
 @then('the response field "{field}" should be "{value}"')
 def check_field_value(context, field, value):
-    assertions.assert_field_equals(context.response.json(), field, value)
+    assertions.assert_field_equals(context.response.json(), field, resolve(context, value))
+
+@then('the response field "{field}" should be {flag:Boolean}')
+def check_field_boolean(context, field, flag):
+    assertions.assert_field_is_boolean(context.response.json(), field, flag)
+
+@then('the response field "{field}" should be an ISO 8601 timestamp')
+def check_field_is_timestamp(context, field):
+    assertions.assert_field_is_iso_timestamp(context.response.json(), field)
+
+@then('the response field "{field}" should equal the response field "{other}"')
+def check_fields_equal(context, field, other):
+    assertions.assert_fields_equal(context.response.json(), field, other)
 
 @then('the response field "{field}" should be {value:d}')
 def check_field_int_value(context, field, value):
@@ -116,6 +151,10 @@ def check_list_length(context, count):
 @then('{items:ItemList} should have {count:d} items')
 def check_items_count(context, items, count):
     assertions.assert_list_length(items_in(context, items), count)
+
+@then('{items:ItemList} should have as many items as the response field "{field}"')
+def check_items_count_matches_field(context, items, field):
+    assertions.assert_list_length(items_in(context, items), assertions.field(context.response.json(), field))
 
 @then('{items:ItemList} should be empty')
 def check_items_empty(context, items):
