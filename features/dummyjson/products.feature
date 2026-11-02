@@ -94,3 +94,39 @@ Feature: Products
     Then the response status code should be 200
     And the "products" list should be empty
     And the response field "limit" should be 0
+
+  @positive
+  Scenario: Search finds products by title or description
+    The search also matches descriptions, so checking titles alone would fail.
+
+    When I send a GET request to "/products/search?q=phone"
+    Then the response status code should be 200
+    And the response field "total" should be greater than 0
+    And every item in the "products" list should contain "phone" in any of "title, description", ignoring case
+
+  @positive
+  Scenario: Filter products by category
+    When I send a GET request to "/products/category/smartphones"
+    Then the response status code should be 200
+    And every item in the "products" list should have "category" equal to "smartphones"
+
+  @edge
+  Scenario: Search ignores the case of the query
+    Given I send a GET request to "/products/search?q=phone"
+    And I remember the response body
+    When I send a GET request to "/products/search?q=PHONE"
+    Then the response status code should be 200
+    And the response body should equal the remembered body
+
+  @edge
+  Scenario: A search with no matches returns an empty result
+    When I send a GET request to "/products/search?q=zzqqxx"
+    Then the response status code should be 200
+    And the "products" list should be empty
+    And the response field "total" should be 0
+
+  @edge
+  Scenario: An unknown category returns an empty list, not a 404
+    When I send a GET request to "/products/category/flying-cars"
+    Then the response status code should be 200
+    And the "products" list should be empty
