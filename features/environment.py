@@ -18,6 +18,7 @@ def before_scenario(context, scenario):
     # Fresh session per scenario: shared connection pool, no state leaking between scenarios
     context.session = requests.Session()
     context.session.headers.update({"Accept": "application/json"})
+    context.saved = {}  # values saved by steps, used as "{name}" in later steps
     # One client per service, all sharing this scenario's session
     context.clients = {
         service: ApiClient(context.session, base_url, context.settings.request_timeout)

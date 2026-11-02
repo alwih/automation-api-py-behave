@@ -2,7 +2,7 @@
 
 A simple, beginner-friendly API automation project using **Behave (BDD)** and **requests**, with **miniconda** for package management.
 
-It tests the posts endpoints of the [JSONPlaceholder](https://jsonplaceholder.typicode.com/) public API (read, create, update, delete) with positive, negative and edge-case scenarios, and records the API's known bugs as scenarios that are skipped by default.
+It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue on [DummyJSON](https://dummyjson.com/docs/products) (lookup, pagination, sorting, search, categories and simulated writes). Known API bugs are recorded as scenarios that are skipped by default.
 
 ## Project Structure
 
@@ -14,6 +14,8 @@ automation_py_api/
 ├── config/
 │   └── settings.py                # Base URLs, timeout and credentials from -D / env / .env / defaults
 ├── features/
+│   ├── dummyjson/
+│   │   └── products.feature       # Product lookup, paging, sorting, search, writes
 │   ├── jsonplaceholder/
 │   │   ├── posts_read.feature     # GET scenarios for posts and comments
 │   │   ├── posts_write.feature    # POST, PUT, PATCH, DELETE scenarios
@@ -32,6 +34,15 @@ automation_py_api/
 Settings are read once in `before_all`. Every scenario then gets its own `requests.Session` (closed in `after_scenario`) with an `Accept: application/json` header, and one `ApiClient` per API on top of it: JSONPlaceholder and DummyJSON. Each client adds its base URL and an explicit timeout, so a slow API fails the test instead of hanging the run. A feature picks its API in the `Background`, e.g. `Given the JSONPlaceholder API is available`.
 
 Step definitions stay small: one step sends any method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, matched by a custom `HttpMethod` type), and the `Then` steps call functions in `api/assertions.py`. Field names in those steps are dotted paths, so `address.geo.lat` reaches into nested objects and `products.0.id` indexes a list.
+
+List steps work on either shape of list response. JSONPlaceholder returns a bare list (`every item in the response ...`), while DummyJSON wraps it in an object with paging fields (`every item in the "products" list ...`). A step can also save a value for later steps, which is how boundaries that change over time are derived at runtime instead of hard-coded:
+
+```gherkin
+Given I send a GET request to "/products?limit=1&select=id"
+And I save the response field "total" plus 1 as "next_id"
+When I send a GET request to "/products/{next_id}"
+Then the response status code should be 404
+```
 
 ## Prerequisites
 
@@ -104,12 +115,12 @@ Run from the repository root. `behave.ini` points behave at `features/` and uses
 
 | Tag | Meaning |
 |---|---|
-| `@smoke` | Fast health check: one read, one write |
+| `@smoke` | Fast health check of each API |
 | `@regression` | Full coverage of an area |
 | `@positive` / `@negative` / `@edge` | Scenario intent: happy path, expected errors, boundaries |
 | `@known_issue` | Asserts the correct behavior for a known API bug, so it fails today |
 | `@wip` | Work in progress |
-| `@jsonplaceholder` | Scenarios that hit JSONPlaceholder |
+| `@jsonplaceholder` / `@dummyjson` | Which API a scenario hits |
 
 Plain `behave` skips `@known_issue` and `@wip` (set by `default_tags` in `behave.ini`). A `--tags` option on the command line **replaces** that default instead of adding to it, so add `{config.tags}` to keep the known issues out:
 
@@ -173,7 +184,30 @@ behave --tags=@smoke --show-skipped
 | Positive | `GET /users` | 10 users, each with `address.geo.lat`, `address.geo.lng`, `company.name` |
 | Negative | `GET /users/11` | 404 with an empty object |
 
-Every scenario shares a `Background` step that selects the JSONPlaceholder client.
+**Products** ([products.feature](features/dummyjson/products.feature)) - 23 scenarios. DummyJSON fakes writes too, so add, update and delete are checked by their responses:
+
+| Type | Request | Checks |
+|---|---|---|
+| Positive | `GET /products/1` | 200, has `id`, `title`, `price`, `category`, `stock`, `rating`; `price` above 0 |
+| Positive | `GET /products?limit=5&skip=10` | Ids 11-15; `skip` 10, `limit` 5, `total` above 0 |
+| Positive | `GET /products?sortBy=price&order=asc` / `desc` | Prices in that order (ties allowed) |
+| Positive | `GET /products?select=title,price` | Every product has exactly `id`, `title`, `price` |
+| Positive | `GET /products/search?q=phone` | Every result mentions "phone" in its title or description, ignoring case |
+| Positive | `GET /products/category/smartphones` | Every product is in `smartphones` |
+| Positive | `POST /products/add` | 201, echoes the fields sent, `id` is an integer |
+| Positive | `GET`, then `PUT /products/1` with a new price | Price changed; `id`, `title`, `category` unchanged |
+| Positive | `DELETE /products/1` | `isDeleted` is true, `deletedOn` is an ISO 8601 timestamp |
+| Negative | `GET /products/0`, `abc`, and one past the last id | 404, `Product with id '<id>' not found`; the last id comes from `total` at runtime |
+| Negative | `GET /products?limit=-1` / `abc` | 400, `Invalid 'limit' - should be a positive number` |
+| Negative | `GET /products?sortBy=price&order=sideways` | 400, `Invalid 'order' - should be either 'asc' or 'desc'` |
+| Negative | `PUT` / `DELETE /products/99999` | 404 with the not-found message |
+| Edge | `GET /products?limit=0` | Returns every product: `limit` equals `total` and the list has `total` items |
+| Edge | `GET /products?skip=1000` | 200 with an empty `products` list and `limit` 0 |
+| Edge | `search?q=PHONE` vs `search?q=phone` | Identical responses |
+| Edge | `search?q=zzqqxx` | Empty `products`, `total` 0 |
+| Edge | `GET /products/category/flying-cars` | 200 with an empty list, not a 404 |
+
+Each feature's `Background` picks its API client (`Given the JSONPlaceholder API is available` or `Given the DummyJSON API is available`).
 
 ## Modifying Test Data
 
@@ -260,6 +294,9 @@ conda env create -f environment.yml
 **`HOOK-ERROR in before_all: ValueError: REQUEST_TIMEOUT ...`?**
 - The timeout must be a number of seconds greater than 0. Check the `-D` option, your environment variables and `.env`, in that order.
 
+**DummyJSON scenarios start failing when re-run in a tight loop?**
+- DummyJSON rate-limits clients: responses carry `x-ratelimit-limit: 100` and a reset time a few seconds ahead. A normal run stays well under it; wait a few seconds and run again.
+
 **`behave --tags=@regression` fails on `/posts/9999`?**
 - Those are `@known_issue` scenarios. Command-line tags replace the default filter, so use `behave --tags="@regression and {config.tags}"`.
 
@@ -268,6 +305,7 @@ conda env create -f environment.yml
 
 ## Next Steps
 
+- Add DummyJSON authentication tests (JWT login, protected routes, token refresh)
 - Add JSON Schema contract checks and pytest unit tests for helpers
 - Add Allure/JUnit reporting and a GitHub Actions pipeline
 
@@ -285,3 +323,4 @@ conda env create -f environment.yml
 - [python-dotenv](https://saurabh-kumar.com/python-dotenv/)
 - [Behave userdata (`-D NAME=value`)](https://behave.readthedocs.io/en/latest/new_and_noteworthy_v1.2.5/#userdata)
 - [JSONPlaceholder API Guide](https://jsonplaceholder.typicode.com/guide/)
+- [DummyJSON Products API](https://dummyjson.com/docs/products)

@@ -3,6 +3,7 @@
 Field paths are dotted: "address.geo.lat" walks nested objects, and a
 numeric part indexes a list, so "products.0.id" is the first product's id.
 """
+from datetime import datetime
 
 
 def get_path(data, path):
@@ -81,6 +82,27 @@ def assert_field_greater_than(body, path, minimum):
     assert actual > minimum, f"Expected {path} > {minimum} but got {actual!r}"
 
 
+def assert_field_is_boolean(body, path, expected):
+    actual = field(body, path)
+    # Identity, so 1 and 0 don't pass as true and false
+    assert actual is expected, f"Expected {path} to be {expected} but got {actual!r}"
+
+
+def assert_field_is_iso_timestamp(body, path):
+    value = field(body, path)
+    try:
+        # fromisoformat only accepts a trailing "Z" from Python 3.11 on
+        valid = isinstance(value, str) and "T" in value and bool(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    except ValueError:
+        valid = False
+    assert valid, f"Expected '{path}' to be an ISO 8601 timestamp but got {value!r}"
+
+
+def assert_fields_equal(body, path, other_path):
+    actual, other = field(body, path), field(body, other_path)
+    assert actual == other, f"Expected {path} ({actual!r}) to equal {other_path} ({other!r})"
+
+
 def assert_body_equals(body, expected):
     assert body == expected, f"Expected {expected} but got: {body}"
 
@@ -110,6 +132,29 @@ def assert_every_item_field_equals(body, path, expected):
 def assert_every_item_field_contains(body, path, text):
     for item in non_empty_list(body):
         assert text in field(item, path), f"Expected {path} to contain '{text}' but got: {item}"
+
+
+def assert_every_item_has_exact_fields(body, names):
+    for item in non_empty_list(body):
+        assert set(item) == set(names), \
+            f"Expected exactly {sorted(names)} but got {sorted(item)}: {item}"
+
+
+def assert_every_item_mentions(body, paths, text):
+    # Passes when at least one of the fields contains the text, ignoring case
+    needle = text.lower()
+    for item in non_empty_list(body):
+        assert any(needle in str(field(item, path)).lower() for path in paths), \
+            f"Expected '{text}' in one of {paths} but got: {item}"
+
+
+def assert_sorted(body, path, descending=False):
+    values = [field(item, path) for item in non_empty_list(body)]
+    # Equal neighbours are fine; only a strictly out-of-order pair fails
+    for index, (current, following) in enumerate(zip(values, values[1:])):
+        in_order = current >= following if descending else current <= following
+        assert in_order, (f"{path} not {'descending' if descending else 'ascending'} "
+                          f"at items {index} and {index + 1}: {current!r} then {following!r}")
 
 
 def assert_item_values(body, path, expected):
