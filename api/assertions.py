@@ -112,6 +112,29 @@ def assert_every_item_field_contains(body, path, text):
         assert text in field(item, path), f"Expected {path} to contain '{text}' but got: {item}"
 
 
+def assert_every_item_has_exact_fields(body, names):
+    for item in non_empty_list(body):
+        assert set(item) == set(names), \
+            f"Expected exactly {sorted(names)} but got {sorted(item)}: {item}"
+
+
+def assert_every_item_mentions(body, paths, text):
+    # Passes when at least one of the fields contains the text, ignoring case
+    needle = text.lower()
+    for item in non_empty_list(body):
+        assert any(needle in str(field(item, path)).lower() for path in paths), \
+            f"Expected '{text}' in one of {paths} but got: {item}"
+
+
+def assert_sorted(body, path, descending=False):
+    values = [field(item, path) for item in non_empty_list(body)]
+    # Equal neighbours are fine; only a strictly out-of-order pair fails
+    for index, (current, following) in enumerate(zip(values, values[1:])):
+        in_order = current >= following if descending else current <= following
+        assert in_order, (f"{path} not {'descending' if descending else 'ascending'} "
+                          f"at items {index} and {index + 1}: {current!r} then {following!r}")
+
+
 def assert_item_values(body, path, expected):
     actual = [field(item, path) for item in non_empty_list(body)]
     assert actual == expected, f"Expected {path} values {expected} but got {actual}"

@@ -87,7 +87,7 @@ Feature: Reading posts
   Scenario: Paginating posts returns the requested slice and the total count
     When I send a GET request to "/posts?_page=2&_limit=5"
     Then the response status code should be 200
-    And the response items should have "id" values 6, 7, 8, 9, 10
+    And the "id" values in the response should be 6, 7, 8, 9, 10
     And the response header "X-Total-Count" should be "100"
 
   @edge
