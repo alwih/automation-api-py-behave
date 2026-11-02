@@ -130,3 +130,48 @@ Feature: Products
     When I send a GET request to "/products/category/flying-cars"
     Then the response status code should be 200
     And the "products" list should be empty
+
+  @positive
+  Scenario: Add a product
+    DummyJSON simulates writes: the response looks real, but nothing is stored.
+
+    When I send a POST request to "/products/add" with:
+      | field    | value               |
+      | title    | Trail Running Shoes |
+      | price    | 89.5                |
+      | category | mens-shoes          |
+    Then the response status code should be 201
+    And the response should echo the request body
+    And the response field "id" should be an integer
+
+  @positive
+  Scenario: Updating a product's price keeps its other fields
+    Given I send a GET request to "/products/1"
+    And I remember the response body
+    When I send a PUT request to "/products/1" with:
+      | field | value |
+      | price | 12.49 |
+    Then the response status code should be 200
+    And the response should echo the request body
+    And the response fields "id, title, category" should match the remembered body
+
+  @positive
+  Scenario: Delete a product
+    When I send a DELETE request to "/products/1"
+    Then the response status code should be 200
+    And the response field "isDeleted" should be true
+    And the response field "deletedOn" should be an ISO 8601 timestamp
+
+  @negative
+  Scenario: Updating a product that does not exist returns 404
+    When I send a PUT request to "/products/99999" with:
+      | field | value |
+      | price | 1     |
+    Then the response status code should be 404
+    And the response field "message" should be "Product with id '99999' not found"
+
+  @negative
+  Scenario: Deleting a product that does not exist returns 404
+    When I send a DELETE request to "/products/99999"
+    Then the response status code should be 404
+    And the response field "message" should be "Product with id '99999' not found"
