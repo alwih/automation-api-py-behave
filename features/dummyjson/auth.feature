@@ -131,3 +131,30 @@ Feature: Authentication
     When I log in as the configured user with the username in upper case
     Then the response status code should be 200
     And the response field "username" should be "{username}"
+
+  @known_issue @security
+  Scenario: A malformed bearer token is rejected with 401
+    Actual: DummyJSON answers 500 with {"message": "invalid token"}.
+
+    Given I set the header "Authorization" to "Bearer not.a.jwt"
+    When I send a GET request to "/auth/me"
+    Then the response status code should be 401
+
+  @known_issue @security
+  Scenario: A token with a tampered signature is rejected with 401
+    Actual: DummyJSON answers 500 with {"message": "invalid signature"}.
+
+    Given I am logged in
+    And I save a copy of "access_token" with a tampered signature as "tampered_token"
+    And I set the header "Authorization" to "Bearer {tampered_token}"
+    When I send a GET request to "/auth/me"
+    Then the response status code should be 401
+
+  @known_issue @security
+  Scenario: The profile response does not expose the password
+    Actual: /auth/me returns the user's password in plain text.
+
+    Given I am logged in
+    When I send a GET request to "/auth/me"
+    Then the response status code should be 200
+    And the response should not contain "password"
