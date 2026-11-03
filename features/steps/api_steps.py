@@ -34,14 +34,20 @@ def use_service(context, service):
 @when('I send a {method:HttpMethod} request to "{endpoint}"')
 def send_request(context, method, endpoint):
     context.response = None  # so a request that raises doesn't leave the previous response behind
-    context.response = context.client.request(method, resolve(endpoint, context.saved))
+    context.response = context.client.request(method, resolve(endpoint, context.saved),
+                                              headers=context.request_headers)
 
 @given('I send a {method:HttpMethod} request to "{endpoint}" with:')
 @when('I send a {method:HttpMethod} request to "{endpoint}" with:')
 def send_request_with_table(context, method, endpoint):
     context.request_body = body_from_table(context.table)
     context.response = None
-    context.response = context.client.request(method, resolve(endpoint, context.saved), json_body=context.request_body)
+    context.response = context.client.request(method, resolve(endpoint, context.saved),
+                                              json_body=context.request_body, headers=context.request_headers)
+
+@step('I set the header "{name}" to "{value}"')
+def set_request_header(context, name, value):
+    context.request_headers[name] = resolve(value, context.saved)
 
 @step('I remember the response body')
 def remember_response_body(context):

@@ -1,8 +1,6 @@
 import logging
 
-import requests
-
-from api.client import ApiClient
+from api.client import ApiClient, new_session
 from config.settings import load_settings
 
 log = logging.getLogger("api")
@@ -16,8 +14,8 @@ def before_all(context):
 
 def before_scenario(context, scenario):
     # Fresh session per scenario: shared connection pool, no state leaking between scenarios
-    context.session = requests.Session()
-    context.session.headers.update({"Accept": "application/json"})
+    context.session = new_session()
+    context.request_headers = {}  # extra headers for this scenario's requests, e.g. Authorization
     context.saved = {}  # values saved by steps, used as "{name}" in later steps
     # One client per service, all sharing this scenario's session
     context.clients = {
