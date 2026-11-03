@@ -1,9 +1,7 @@
-import json
-import re
-
 import parse
 from behave import given, when, then, step, register_type
 from api import assertions
+from api.step_data import body_from_table, resolve
 
 @parse.with_pattern(r"GET|POST|PUT|PATCH|DELETE")
 def parse_http_method(text):
@@ -26,43 +24,30 @@ def parse_boolean(text):
 register_type(HttpMethod=parse_http_method, ItemList=parse_item_list,
               SortDirection=parse_sort_direction, Boolean=parse_boolean)
 
-def resolve(context, text):
-    # "{name}" is replaced by a value saved earlier in the scenario
-    def saved_value(match):
-        name = match.group(1)
-        assert name in context.saved, f"Nothing saved as '{name}' yet; saved: {sorted(context.saved)}"
-        return str(context.saved[name])
-    return re.sub(r"\{(\w+)\}", saved_value, text)
-
 @given('the {service} API is available')
 def use_service(context, service):
     assert service.lower() in context.clients, \
         f"Unknown service '{service}', expected one of {sorted(context.clients)}"
     context.client = context.clients[service.lower()]
 
-def body_from_table(table):
-    # Values are JSON literals when they parse (1 -> int, true -> bool), otherwise strings.
-    # Quote a value ("1") to send it as a string.
-    body = {}
-    for row in table:
-        try:
-            body[row["field"]] = json.loads(row["value"])
-        except ValueError:
-            body[row["field"]] = row["value"]
-    return body
-
 @given('I send a {method:HttpMethod} request to "{endpoint}"')
 @when('I send a {method:HttpMethod} request to "{endpoint}"')
 def send_request(context, method, endpoint):
     context.response = None  # so a request that raises doesn't leave the previous response behind
-    context.response = context.client.request(method, resolve(context, endpoint))
+    context.response = context.client.request(method, resolve(endpoint, context.saved),
+                                              headers=context.request_headers)
 
 @given('I send a {method:HttpMethod} request to "{endpoint}" with:')
 @when('I send a {method:HttpMethod} request to "{endpoint}" with:')
 def send_request_with_table(context, method, endpoint):
-    context.request_body = body_from_table(context.table)
+    context.request_body = body_from_table(context.table, context.saved)
     context.response = None
-    context.response = context.client.request(method, resolve(context, endpoint), json_body=context.request_body)
+    context.response = context.client.request(method, resolve(endpoint, context.saved),
+                                              json_body=context.request_body, headers=context.request_headers)
+
+@step('I set the header "{name}" to "{value}"')
+def set_request_header(context, name, value):
+    context.request_headers[name] = resolve(value, context.saved)
 
 @step('I remember the response body')
 def remember_response_body(context):
@@ -98,7 +83,7 @@ def check_field_absent(context, field):
 
 @then('the response field "{field}" should be "{value}"')
 def check_field_value(context, field, value):
-    assertions.assert_field_equals(context.response.json(), field, resolve(context, value))
+    assertions.assert_field_equals(context.response.json(), field, resolve(value, context.saved))
 
 @then('the response field "{field}" should be {flag:Boolean}')
 def check_field_boolean(context, field, flag):
@@ -107,6 +92,11 @@ def check_field_boolean(context, field, flag):
 @then('the response field "{field}" should be an ISO 8601 timestamp')
 def check_field_is_timestamp(context, field):
     assertions.assert_field_is_iso_timestamp(context.response.json(), field)
+
+@then('the response field "{field}" should equal the saved "{name}"')
+def check_field_equals_saved(context, field, name):
+    assert name in context.saved, f"Nothing saved as '{name}' yet; saved: {sorted(context.saved)}"
+    assertions.assert_field_equals(context.response.json(), field, context.saved[name])
 
 @then('the response field "{field}" should equal the response field "{other}"')
 def check_fields_equal(context, field, other):

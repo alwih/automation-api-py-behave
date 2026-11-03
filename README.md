@@ -2,27 +2,33 @@
 
 A simple, beginner-friendly API automation project using **Behave (BDD)** and **requests**, with **miniconda** for package management.
 
-It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue on [DummyJSON](https://dummyjson.com/docs/products) (lookup, pagination, sorting, search, categories and simulated writes). Known API bugs are recorded as scenarios that are skipped by default.
+It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Known API bugs, including three security issues, are recorded as scenarios that are skipped by default.
 
 ## Project Structure
 
 ```
 automation_py_api/
 ├── api/
-│   ├── client.py                  # ApiClient: base URL, timeout, JSON bodies sent as UTF-8
-│   └── assertions.py              # Response checks with dotted-path field access
+│   ├── client.py                  # ApiClient + cookie-free session: base URL, timeout, headers, UTF-8 JSON
+│   ├── assertions.py              # Response checks with dotted-path field access
+│   ├── auth.py                    # DummyJSON credentials and login
+│   ├── tokens.py                  # JWT decoding (no signature check) and tampering for negative tests
+│   ├── step_data.py               # "{name}" placeholders and data-table bodies
+│   └── redaction.py               # Hides the configured password in failure output
 ├── config/
 │   └── settings.py                # Base URLs, timeout and credentials from -D / env / .env / defaults
 ├── features/
 │   ├── dummyjson/
+│   │   ├── auth.feature           # Login, token lifetime, protected routes, refresh, security issues
 │   │   └── products.feature       # Product lookup, paging, sorting, search, writes
 │   ├── jsonplaceholder/
 │   │   ├── posts_read.feature     # GET scenarios for posts and comments
 │   │   ├── posts_write.feature    # POST, PUT, PATCH, DELETE scenarios
 │   │   └── users.feature          # Nested user fields (address, company)
-│   ├── environment.py             # Hooks: load settings, one client per API, log the response when a step fails
+│   ├── environment.py             # Hooks: settings, one client per API, @authenticated login, failure log
 │   └── steps/
-│       └── api_steps.py           # Step definitions (thin wrappers over api/)
+│       ├── api_steps.py           # Request and response steps (thin wrappers over api/)
+│       └── auth_steps.py          # Login, token and JWT steps
 ├── .env.example                   # Template for a local .env (copy and edit)
 ├── behave.ini                     # Behave defaults (paths, format, default tag filter)
 ├── environment.yml                # Conda environment (Python 3.11 + requirements)
@@ -31,7 +37,11 @@ automation_py_api/
 └── README.md                      # This file
 ```
 
-Settings are read once in `before_all`. Every scenario then gets its own `requests.Session` (closed in `after_scenario`) with an `Accept: application/json` header, and one `ApiClient` per API on top of it: JSONPlaceholder and DummyJSON. Each client adds its base URL and an explicit timeout, so a slow API fails the test instead of hanging the run. A feature picks its API in the `Background`, e.g. `Given the JSONPlaceholder API is available`.
+Settings are read once in `before_all`. Every scenario then gets its own `requests.Session` (closed in `after_scenario`) with an `Accept: application/json` header and no cookie storage, and one `ApiClient` per API on top of it: JSONPlaceholder and DummyJSON. Each client adds its base URL and an explicit timeout, so a slow API fails the test instead of hanging the run. A feature picks its API in the `Background`, e.g. `Given the JSONPlaceholder API is available`.
+
+The session keeps no cookies on purpose: DummyJSON's login also sets `accessToken` cookies, which would quietly authenticate later requests and make "no token" or "new token works" checks pass for the wrong reason. Authentication only ever comes from the `Authorization` header a scenario sets.
+
+A feature or scenario tagged `@authenticated` logs in **once** through a behave fixture (`before_tag` + `use_fixture`), which keeps the run well under DummyJSON's rate limit. `Given I am logged in` then sets the bearer token and saves `{access_token}`, `{refresh_token}` and `{user_id}` for later steps.
 
 Step definitions stay small: one step sends any method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, matched by a custom `HttpMethod` type), and the `Then` steps call functions in `api/assertions.py`. Field names in those steps are dotted paths, so `address.geo.lat` reaches into nested objects and `products.0.id` indexes a list.
 
@@ -91,6 +101,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Then create your local settings file. The DummyJSON login scenarios need the credentials in it:
+
+```bash
+cp .env.example .env
+```
+
 ## Running the Tests
 
 ### Run All Tests with Behave
@@ -120,7 +136,9 @@ Run from the repository root. `behave.ini` points behave at `features/` and uses
 | `@positive` / `@negative` / `@edge` | Scenario intent: happy path, expected errors, boundaries |
 | `@known_issue` | Asserts the correct behavior for a known API bug, so it fails today |
 | `@wip` | Work in progress |
-| `@jsonplaceholder` / `@dummyjson` | Which API a scenario hits |
+| `@security` | A known issue with security impact |
+| `@jsonplaceholder` / `@dummyjson` / `@auth` | Which API or area a scenario covers |
+| `@authenticated` | Not a filter: logs in once for the tagged feature or scenario |
 
 Plain `behave` skips `@known_issue` and `@wip` (set by `default_tags` in `behave.ini`). A `--tags` option on the command line **replaces** that default instead of adding to it, so add `{config.tags}` to keep the known issues out:
 
@@ -207,6 +225,25 @@ behave --tags=@smoke --show-skipped
 | Edge | `search?q=zzqqxx` | Empty `products`, `total` 0 |
 | Edge | `GET /products/category/flying-cars` | 200 with an empty list, not a 404 |
 
+**Authentication** ([auth.feature](features/dummyjson/auth.feature)) - 19 scenarios, 3 of them known issues. They log in as the account in `DUMMYJSON_USERNAME` / `DUMMYJSON_PASSWORD`:
+
+| Type | Request | Checks |
+|---|---|---|
+| Positive | `POST /auth/login` | 200; `accessToken` and `refreshToken` are JWTs; `username` matches the configured user; `id` is an integer; no `password` field |
+| Positive | Login with `expiresInMins` 1 / 30 | The access token's `exp - iat` is 60 / 1800 seconds |
+| Positive | `GET /auth/me` with the bearer token | 200, same `id` as the login |
+| Positive | `GET /auth/products/1` with the bearer token | 200 |
+| Positive | `POST /auth/refresh`, then `/auth/me` with the new access token | New JWTs that work |
+| Negative | Login with a wrong password, and with an unknown user | Both 400 `Invalid credentials`, so the API doesn't reveal which usernames exist |
+| Negative | Login without a password, and with an empty body | 400 `Username and password required` |
+| Negative | `/auth/me` and `/auth/products/1` without a token | 401 `Access Token is required` |
+| Negative | `/auth/me` with `Authorization: Basic abc` | 401 `Invalid/Expired Token!` |
+| Negative | `/auth/refresh` with no token / with `abc` | 401 `Refresh token required` / 403 `Invalid refresh token` |
+| Edge | Login with the username in upper case | 200: usernames are case-insensitive |
+| Known issue | `/auth/me` with `Bearer not.a.jwt` | Should be 401. Actual: 500 `invalid token` |
+| Known issue | `/auth/me` with a tampered signature | Should be 401. Actual: 500 `invalid signature` |
+| Known issue | `/auth/me` response | Must not contain `password`. Actual: it returns the password in plain text |
+
 Each feature's `Background` picks its API client (`Given the JSONPlaceholder API is available` or `Given the DummyJSON API is available`).
 
 ## Modifying Test Data
@@ -223,8 +260,8 @@ Settings live in [config/settings.py](config/settings.py). Each one is taken fro
 | `JSONPLACEHOLDER_BASE_URL` | `https://jsonplaceholder.typicode.com` | JSONPlaceholder client |
 | `DUMMYJSON_BASE_URL` | `https://dummyjson.com` | DummyJSON client |
 | `REQUEST_TIMEOUT` | `10` | Seconds to wait for each request before failing |
-| `DUMMYJSON_USERNAME` | none | DummyJSON login |
-| `DUMMYJSON_PASSWORD` | none | DummyJSON login |
+| `DUMMYJSON_USERNAME` | none | DummyJSON login (auth scenarios) |
+| `DUMMYJSON_PASSWORD` | none | DummyJSON login (auth scenarios); hidden as `***` in failure output |
 
 The credentials have no default on purpose. To use the public DummyJSON demo account, copy the template; `.env` is git-ignored:
 
@@ -276,6 +313,9 @@ pip install -r requirements.txt --force-reinstall
 **Editor says `parse` or `register_type` can't be resolved?**
 - The editor is using a different Python. Point it at the `api_automation` environment (VS Code: *Python: Select Interpreter*). `parse` is installed with behave.
 
+**`HOOK-ERROR in before_tag(tag=authenticated): RuntimeError: DummyJSON credentials are not set`?**
+- Create `.env` with `cp .env.example .env`, or set `DUMMYJSON_USERNAME` and `DUMMYJSON_PASSWORD`. The other features still run without it.
+
 **Reading a failure**
 - When a step fails, the log line above the error shows the last request and response, e.g. `LOG_ERROR:api: PUT https://jsonplaceholder.typicode.com/posts/9999 -> 500`, followed by the first 500 characters of the body.
 
@@ -305,7 +345,6 @@ conda env create -f environment.yml
 
 ## Next Steps
 
-- Add DummyJSON authentication tests (JWT login, protected routes, token refresh)
 - Add JSON Schema contract checks and pytest unit tests for helpers
 - Add Allure/JUnit reporting and a GitHub Actions pipeline
 
@@ -323,4 +362,5 @@ conda env create -f environment.yml
 - [python-dotenv](https://saurabh-kumar.com/python-dotenv/)
 - [Behave userdata (`-D NAME=value`)](https://behave.readthedocs.io/en/latest/new_and_noteworthy_v1.2.5/#userdata)
 - [JSONPlaceholder API Guide](https://jsonplaceholder.typicode.com/guide/)
-- [DummyJSON Products API](https://dummyjson.com/docs/products)
+- [DummyJSON Products API](https://dummyjson.com/docs/products) and [Auth API](https://dummyjson.com/docs/auth)
+- [Behave fixtures (`@fixture`, `use_fixture`)](https://behave.readthedocs.io/en/latest/fixtures/)

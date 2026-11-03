@@ -3,7 +3,11 @@
 Field paths are dotted: "address.geo.lat" walks nested objects, and a
 numeric part indexes a list, so "products.0.id" is the first product's id.
 """
+import functools
 from datetime import datetime
+
+from api.redaction import redact
+from api.tokens import decode_jwt
 
 
 def get_path(data, path):
@@ -98,6 +102,21 @@ def assert_field_is_iso_timestamp(body, path):
     assert valid, f"Expected '{path}' to be an ISO 8601 timestamp but got {value!r}"
 
 
+def assert_field_is_jwt(body, path):
+    value = field(body, path)
+    try:
+        decode_jwt(value)
+    except ValueError as error:
+        raise AssertionError(f"Expected '{path}' to be a JWT, but {error}: {value!r:.80}") from None
+
+
+def assert_jwt_lifetime(token, seconds):
+    _, payload = decode_jwt(token)
+    lifetime = payload["exp"] - payload["iat"]
+    assert lifetime == seconds, \
+        f"Expected the token to last {seconds}s (exp - iat) but it lasts {lifetime}s"
+
+
 def assert_fields_equal(body, path, other_path):
     actual, other = field(body, path), field(body, other_path)
     assert actual == other, f"Expected {path} ({actual!r}) to equal {other_path} ({other!r})"
@@ -176,3 +195,19 @@ def assert_echoes(body, sent):
     for key, value in sent.items():
         assert isinstance(body, dict) and key in body and body[key] == value, \
             f"Expected {key} == {value!r} but got: {body}"
+
+
+def _hide_secrets(check):
+    @functools.wraps(check)
+    def wrapper(*args, **kwargs):
+        try:
+            return check(*args, **kwargs)
+        except AssertionError as error:
+            raise AssertionError(redact(str(error))) from None
+    return wrapper
+
+
+# Failure messages quote response bodies; make every check above hide registered secrets
+for _name, _check in list(globals().items()):
+    if callable(_check) and (_name.startswith("assert_") or _name in ("field", "non_empty_list")):
+        globals()[_name] = _hide_secrets(_check)
