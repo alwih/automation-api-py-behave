@@ -12,6 +12,8 @@ BODY_LOG_LIMIT = 500  # characters of the response body to show for a failed ste
 
 
 def before_all(context):
+    # Defining before_all replaces behave's default one, which only sets up logging
+    context.config.setup_logging()
     # Read once and fail fast on bad config, before any request is sent
     context.settings = load_settings(context.config.userdata)
     # Kept out of failure output; /auth/me echoes the password back
