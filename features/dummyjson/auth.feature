@@ -60,3 +60,74 @@ Feature: Authentication
     And I send a GET request to "/auth/me"
     Then the response status code should be 200
     And the response field "id" should equal the saved "user_id"
+
+  @negative
+  Scenario Outline: Wrong credentials get the same message either way (<case>)
+    A wrong password and an unknown user get the same answer, so the
+    response doesn't reveal which usernames exist.
+
+    When I log in as the configured user with:
+      | field   | value   |
+      | <field> | <value> |
+    Then the response status code should be 400
+    And the response field "message" should be "Invalid credentials"
+
+    Examples:
+      | case           | field    | value            |
+      | wrong password | password | not-the-password |
+      | unknown user   | username | no-such-user-xyz |
+
+  @negative
+  Scenario: Logging in without a password is rejected
+    When I send a POST request to "/auth/login" with:
+      | field    | value   |
+      | username | someone |
+    Then the response status code should be 400
+    And the response field "message" should be "Username and password required"
+
+  @negative
+  Scenario: Logging in with an empty body is rejected
+    When I send a POST request to "/auth/login" with:
+      | field | value |
+    Then the response status code should be 400
+    And the response field "message" should be "Username and password required"
+
+  @negative
+  Scenario: The profile endpoint requires a token
+    When I send a GET request to "/auth/me"
+    Then the response status code should be 401
+    And the response field "message" should be "Access Token is required"
+
+  @negative
+  Scenario: The profile endpoint rejects a non-bearer token
+    Given I set the header "Authorization" to "Basic abc"
+    When I send a GET request to "/auth/me"
+    Then the response status code should be 401
+    And the response field "message" should be "Invalid/Expired Token!"
+
+  @negative
+  Scenario: Refreshing without a refresh token is rejected
+    When I send a POST request to "/auth/refresh" with:
+      | field | value |
+    Then the response status code should be 401
+    And the response field "message" should be "Refresh token required"
+
+  @negative
+  Scenario: Refreshing with an invalid refresh token is rejected
+    When I send a POST request to "/auth/refresh" with:
+      | field        | value |
+      | refreshToken | abc   |
+    Then the response status code should be 403
+    And the response field "message" should be "Invalid refresh token"
+
+  @negative
+  Scenario: A protected product route requires a token
+    When I send a GET request to "/auth/products/1"
+    Then the response status code should be 401
+    And the response field "message" should be "Access Token is required"
+
+  @edge
+  Scenario: Usernames are matched without regard to case
+    When I log in as the configured user with the username in upper case
+    Then the response status code should be 200
+    And the response field "username" should be "{username}"
