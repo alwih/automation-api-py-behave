@@ -12,13 +12,14 @@ def resolve(text, saved):
     return re.sub(r"\{(\w+)\}", saved_value, text)
 
 
-def body_from_table(table):
+def body_from_table(table, saved=None):
     # Values are JSON literals when they parse (1 -> int, true -> bool), otherwise strings.
-    # Quote a value ("1") to send it as a string.
+    # Quote a value ("1") to send it as a string. "{name}" placeholders are filled in first.
     body = {}
     for row in table:
+        value = resolve(row["value"], saved) if saved is not None else row["value"]
         try:
-            body[row["field"]] = json.loads(row["value"])
+            body[row["field"]] = json.loads(value)
         except ValueError:
-            body[row["field"]] = row["value"]
+            body[row["field"]] = value
     return body

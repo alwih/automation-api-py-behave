@@ -40,7 +40,7 @@ def send_request(context, method, endpoint):
 @given('I send a {method:HttpMethod} request to "{endpoint}" with:')
 @when('I send a {method:HttpMethod} request to "{endpoint}" with:')
 def send_request_with_table(context, method, endpoint):
-    context.request_body = body_from_table(context.table)
+    context.request_body = body_from_table(context.table, context.saved)
     context.response = None
     context.response = context.client.request(method, resolve(endpoint, context.saved),
                                               json_body=context.request_body, headers=context.request_headers)
@@ -92,6 +92,11 @@ def check_field_boolean(context, field, flag):
 @then('the response field "{field}" should be an ISO 8601 timestamp')
 def check_field_is_timestamp(context, field):
     assertions.assert_field_is_iso_timestamp(context.response.json(), field)
+
+@then('the response field "{field}" should equal the saved "{name}"')
+def check_field_equals_saved(context, field, name):
+    assert name in context.saved, f"Nothing saved as '{name}' yet; saved: {sorted(context.saved)}"
+    assertions.assert_field_equals(context.response.json(), field, context.saved[name])
 
 @then('the response field "{field}" should equal the response field "{other}"')
 def check_fields_equal(context, field, other):

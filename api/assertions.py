@@ -5,6 +5,8 @@ numeric part indexes a list, so "products.0.id" is the first product's id.
 """
 from datetime import datetime
 
+from api.tokens import decode_jwt
+
 
 def get_path(data, path):
     current = data
@@ -96,6 +98,21 @@ def assert_field_is_iso_timestamp(body, path):
     except ValueError:
         valid = False
     assert valid, f"Expected '{path}' to be an ISO 8601 timestamp but got {value!r}"
+
+
+def assert_field_is_jwt(body, path):
+    value = field(body, path)
+    try:
+        decode_jwt(value)
+    except ValueError as error:
+        raise AssertionError(f"Expected '{path}' to be a JWT, but {error}: {value!r:.80}") from None
+
+
+def assert_jwt_lifetime(token, seconds):
+    _, payload = decode_jwt(token)
+    lifetime = payload["exp"] - payload["iat"]
+    assert lifetime == seconds, \
+        f"Expected the token to last {seconds}s (exp - iat) but it lasts {lifetime}s"
 
 
 def assert_fields_equal(body, path, other_path):
