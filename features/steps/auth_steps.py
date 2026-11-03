@@ -11,6 +11,14 @@ def send_login(context, **overrides):
     context.response = None
     context.response = auth.login(context.client, **fields)
 
+@given('I am logged in')
+def use_tagged_login(context):
+    login = getattr(context, "login", None)
+    assert login, "No login available: tag the feature or scenario with @authenticated"
+    context.saved.update(access_token=login["accessToken"], refresh_token=login["refreshToken"],
+                         user_id=login["id"])
+    context.request_headers["Authorization"] = f"Bearer {login['accessToken']}"
+
 @when('I log in as the configured user')
 def log_in(context):
     send_login(context)

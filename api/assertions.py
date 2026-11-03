@@ -3,8 +3,10 @@
 Field paths are dotted: "address.geo.lat" walks nested objects, and a
 numeric part indexes a list, so "products.0.id" is the first product's id.
 """
+import functools
 from datetime import datetime
 
+from api.redaction import redact
 from api.tokens import decode_jwt
 
 
@@ -193,3 +195,19 @@ def assert_echoes(body, sent):
     for key, value in sent.items():
         assert isinstance(body, dict) and key in body and body[key] == value, \
             f"Expected {key} == {value!r} but got: {body}"
+
+
+def _hide_secrets(check):
+    @functools.wraps(check)
+    def wrapper(*args, **kwargs):
+        try:
+            return check(*args, **kwargs)
+        except AssertionError as error:
+            raise AssertionError(redact(str(error))) from None
+    return wrapper
+
+
+# Failure messages quote response bodies; make every check above hide registered secrets
+for _name, _check in list(globals().items()):
+    if callable(_check) and (_name.startswith("assert_") or _name in ("field", "non_empty_list")):
+        globals()[_name] = _hide_secrets(_check)
