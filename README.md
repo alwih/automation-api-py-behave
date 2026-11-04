@@ -2,7 +2,7 @@
 
 A simple, beginner-friendly API automation project using **Behave (BDD)** and **requests**, with **miniconda** for package management.
 
-It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Known API bugs, including three security issues, are recorded as scenarios that are skipped by default.
+It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Responses are also checked against JSON Schema contracts, and the helper code has its own pytest unit tests. Known API bugs, including three security issues, are recorded as scenarios that are skipped by default.
 
 ## Project Structure
 
@@ -13,6 +13,7 @@ automation_py_api/
 │   ├── assertions.py              # Response checks with dotted-path field access
 │   ├── auth.py                    # DummyJSON credentials and login
 │   ├── tokens.py                  # JWT decoding (no signature check) and tampering for negative tests
+│   ├── schema.py                  # JSON Schema validation (Draft 2020-12, formats, $ref between files)
 │   ├── step_data.py               # "{name}" placeholders and data-table bodies
 │   └── redaction.py               # Hides the configured password in failure output
 ├── config/
@@ -29,8 +30,15 @@ automation_py_api/
 │   └── steps/
 │       ├── api_steps.py           # Request and response steps (thin wrappers over api/)
 │       └── auth_steps.py          # Login, token and JWT steps
+├── schemas/
+│   ├── dummyjson/                 # product, product_list, auth_login, error
+│   └── jsonplaceholder/           # post, comment, user
+├── tests/
+│   ├── conftest.py
+│   └── unit/                      # pytest: paths, sorting, JWTs, schemas, settings, data tables
 ├── .env.example                   # Template for a local .env (copy and edit)
 ├── behave.ini                     # Behave defaults (paths, format, default tag filter)
+├── pytest.ini                     # pytest defaults (tests/ folder, imports from the repo root)
 ├── environment.yml                # Conda environment (Python 3.11 + requirements)
 ├── requirements.txt               # Python dependencies (pinned)
 ├── .gitignore                     # Files kept out of version control
@@ -165,16 +173,24 @@ behave features/jsonplaceholder/posts_write.feature
 behave --tags=@smoke --show-skipped
 ```
 
+### Run the Unit Tests
+
+The helper code under `api/` and `config/` has pytest unit tests. They need no network and finish in well under a second:
+
+```bash
+pytest
+```
+
 ## What Gets Tested
 
 **Reading posts** ([posts_read.feature](features/jsonplaceholder/posts_read.feature)) - 16 scenarios, counting each Examples row:
 
 | Type | Request | Checks |
 |---|---|---|
-| Positive | `GET /posts/1` | 200, JSON content type, `id` is 1, `userId` is an integer, `title` and `body` are non-empty strings |
-| Positive | `GET /posts` | 100 posts, each with `userId`, `id`, `title`, `body` |
+| Positive | `GET /posts/1` | 200, JSON content type, `id` is 1, matches the `post` schema |
+| Positive | `GET /posts` | 100 posts, each matching the `post` schema |
 | Positive | `GET /posts?userId=1`, `5`, `10` | 10 posts, all from that user |
-| Positive | `GET /posts/1/comments` | 5 comments, all for post 1, every email contains `@` |
+| Positive | `GET /posts/1/comments` | 5 comments, all for post 1, every email contains `@`, each matches the `comment` schema |
 | Positive | `/posts/1/comments` vs `/comments?postId=1` | Both routes return the same body |
 | Negative | `GET /posts/0`, `101`, `9999`, `abc` | 404 with an empty object |
 | Edge | `GET /posts/1`, `/posts/100` | First and last ids return 200 |
@@ -198,15 +214,15 @@ behave --tags=@smoke --show-skipped
 
 | Type | Request | Checks |
 |---|---|---|
-| Positive | `GET /users/1` | `address.city`, `address.geo.lat` (`"-37.3159"`), `address.geo.lng`, non-empty `company.name` |
-| Positive | `GET /users` | 10 users, each with `address.geo.lat`, `address.geo.lng`, `company.name` |
+| Positive | `GET /users/1` | `address.city`, `address.geo.lat` (`"-37.3159"`), `address.geo.lng`; matches the `user` schema |
+| Positive | `GET /users` | 10 users, each matching the `user` schema |
 | Negative | `GET /users/11` | 404 with an empty object |
 
 **Products** ([products.feature](features/dummyjson/products.feature)) - 23 scenarios. DummyJSON fakes writes too, so add, update and delete are checked by their responses:
 
 | Type | Request | Checks |
 |---|---|---|
-| Positive | `GET /products/1` | 200, has `id`, `title`, `price`, `category`, `stock`, `rating`; `price` above 0 |
+| Positive | `GET /products/1` | 200, `id` is 1, matches the `product` schema (which also requires `price` above 0) |
 | Positive | `GET /products?limit=5&skip=10` | Ids 11-15; `skip` 10, `limit` 5, `total` above 0 |
 | Positive | `GET /products?sortBy=price&order=asc` / `desc` | Prices in that order (ties allowed) |
 | Positive | `GET /products?select=title,price` | Every product has exactly `id`, `title`, `price` |
@@ -229,7 +245,7 @@ behave --tags=@smoke --show-skipped
 
 | Type | Request | Checks |
 |---|---|---|
-| Positive | `POST /auth/login` | 200; `accessToken` and `refreshToken` are JWTs; `username` matches the configured user; `id` is an integer; no `password` field |
+| Positive | `POST /auth/login` | 200; `accessToken` and `refreshToken` are JWTs; `username` matches the configured user; no `password` field; matches the `auth_login` schema |
 | Positive | Login with `expiresInMins` 1 / 30 | The access token's `exp - iat` is 60 / 1800 seconds |
 | Positive | `GET /auth/me` with the bearer token | 200, same `id` as the login |
 | Positive | `GET /auth/products/1` with the bearer token | 200 |
@@ -245,6 +261,17 @@ behave --tags=@smoke --show-skipped
 | Known issue | `/auth/me` response | Must not contain `password`. Actual: it returns the password in plain text |
 
 Each feature's `Background` picks its API client (`Given the JSONPlaceholder API is available` or `Given the DummyJSON API is available`).
+
+**Contracts** ([schemas/](schemas)). Scenarios check response shapes against JSON Schema (Draft 2020-12), including formats such as `date-time`, `email` and `uri`:
+
+| API | Schemas | Strictness |
+|---|---|---|
+| JSONPlaceholder | `post`, `comment`, `user` | No extra keys allowed: the data set never changes |
+| DummyJSON | `product`, `product_list`, `auth_login`, `error` | Extra keys allowed, since the API keeps evolving; listed keys keep their types, ranges and enums |
+
+`product_list` reuses `product.json` through `$ref`, `auth_login` states that a login must never return a password, and every DummyJSON 4xx scenario checks the `error` shape. Each schema was validated against every record the API returns (100 posts, 500 comments, 10 users, 194 products).
+
+**Unit tests** ([tests/unit/](tests/unit)) - pytest cases for the dotted-path getter, the sort check, JWT decoding, schema loading and its error messages, settings precedence, placeholders and data tables, and secret redaction. One test also checks that the `date-time`, `uri` and `email` formats are really enforced: `jsonschema` silently skips a format whose helper library is missing.
 
 ## Modifying Test Data
 
@@ -292,6 +319,15 @@ When I send a POST request to "/posts" with:
 
 Values are read as JSON when they parse, so `1` is sent as a number and `true` as a boolean; anything else, like `Weekly release notes`, is sent as a string. Wrap a value in double quotes (`"1"`) to send it as a string.
 
+Response contracts live in `schemas/<api>/<name>.json`. The API comes from the feature's `Background`, so a scenario only names the schema:
+
+```gherkin
+Then the response should match the "product_list" schema
+And every item in the "products" list should match the "product" schema
+```
+
+A schema can reuse another file in the same folder with `{"$ref": "product.json"}`.
+
 The read scenarios keep their inputs in the feature file too. To try another id or user, add a row to the matching `Examples:` table in [posts_read.feature](features/jsonplaceholder/posts_read.feature); the `note` column says why the row is there and shows up in the scenario name.
 
 ## Troubleshooting
@@ -315,6 +351,12 @@ pip install -r requirements.txt --force-reinstall
 
 **`HOOK-ERROR in before_tag(tag=authenticated): RuntimeError: DummyJSON credentials are not set`?**
 - Create `.env` with `cp .env.example .env`, or set `DUMMYJSON_USERNAME` and `DUMMYJSON_PASSWORD`. The other features still run without it.
+
+**`FileNotFoundError: No schema file at .../schemas/<api>/<name>.json`?**
+- The schema name in the step doesn't match a file for the API picked in the `Background`. Check the spelling, or that the right API is selected.
+
+**A schema check fails after an API change?**
+- The message lists up to five problems with their JSON paths, e.g. `$.products[3].price: -1 is less than or equal to the minimum of 0`. Decide whether the API broke its contract (keep the test failing, or record it as `@known_issue`) or the contract really changed (update the schema).
 
 **Reading a failure**
 - When a step fails, the log line above the error shows the last request and response, e.g. `LOG_ERROR:api: PUT https://jsonplaceholder.typicode.com/posts/9999 -> 500`, followed by the first 500 characters of the body.
@@ -345,7 +387,6 @@ conda env create -f environment.yml
 
 ## Next Steps
 
-- Add JSON Schema contract checks and pytest unit tests for helpers
 - Add Allure/JUnit reporting and a GitHub Actions pipeline
 
 ## Learning Resources
@@ -364,3 +405,6 @@ conda env create -f environment.yml
 - [JSONPlaceholder API Guide](https://jsonplaceholder.typicode.com/guide/)
 - [DummyJSON Products API](https://dummyjson.com/docs/products) and [Auth API](https://dummyjson.com/docs/auth)
 - [Behave fixtures (`@fixture`, `use_fixture`)](https://behave.readthedocs.io/en/latest/fixtures/)
+- [Understanding JSON Schema](https://json-schema.org/understanding-json-schema/)
+- [jsonschema: validating formats](https://python-jsonschema.readthedocs.io/en/stable/validate/#validating-formats)
+- [pytest documentation](https://docs.pytest.org/en/stable/)
