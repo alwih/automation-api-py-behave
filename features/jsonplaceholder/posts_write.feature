@@ -20,6 +20,7 @@ Feature: Writing posts
     And the response should echo the request body
     And the response field "id" should be an integer
     And the response field "id" should be greater than 100
+    And the response should match the "post" schema
 
   @edge
   Scenario: Non-ASCII text survives a create round-trip
@@ -53,6 +54,7 @@ Feature: Writing posts
     Then the response status code should be 200
     And the response should echo the request body
     And the response fields "id, userId, body" should match the remembered body
+    And the response should match the "post" schema
 
   @edge
   Scenario: PUT with a partial body replaces the whole post

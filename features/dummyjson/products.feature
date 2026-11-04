@@ -12,15 +12,15 @@ Feature: Products
     When I send a GET request to "/products/1"
     Then the response status code should be 200
     And the response header "Content-Type" should contain "application/json"
-    And the response should contain the fields "id, title, price, category, stock, rating"
     And the response field "id" should be 1
-    And the response field "price" should be greater than 0
+    And the response should match the "product" schema
 
   @negative
   Scenario Outline: Requesting product <id> returns 404 (<note>)
     When I send a GET request to "/products/<id>"
     Then the response status code should be 404
     And the response field "message" should be "Product with id '<id>' not found"
+    And the response should match the "error" schema
 
     Examples:
       | id  | note               |
@@ -37,6 +37,7 @@ Feature: Products
     When I send a GET request to "/products/{next_id}"
     Then the response status code should be 404
     And the response field "message" should be "Product with id '{next_id}' not found"
+    And the response should match the "error" schema
 
   @positive
   Scenario: Paginate products with limit and skip
@@ -46,12 +47,14 @@ Feature: Products
     And the response field "skip" should be 10
     And the response field "limit" should be 5
     And the response field "total" should be greater than 0
+    And the response should match the "product_list" schema
 
   @positive
   Scenario Outline: Sort products by price in <direction> order
     When I send a GET request to "/products?sortBy=price&order=<order>"
     Then the response status code should be 200
     And the "products" list should be sorted by "price" in <direction> order
+    And the response should match the "product_list" schema
 
     Examples:
       | order | direction  |
@@ -69,6 +72,7 @@ Feature: Products
     When I send a GET request to "/products?limit=<limit>"
     Then the response status code should be 400
     And the response field "message" should be "Invalid 'limit' - should be a positive number"
+    And the response should match the "error" schema
 
     Examples:
       | limit | note         |
@@ -80,6 +84,7 @@ Feature: Products
     When I send a GET request to "/products?sortBy=price&order=sideways"
     Then the response status code should be 400
     And the response field "message" should be "Invalid 'order' - should be either 'asc' or 'desc'"
+    And the response should match the "error" schema
 
   @edge
   Scenario: A limit of 0 returns every product
@@ -87,6 +92,7 @@ Feature: Products
     Then the response status code should be 200
     And the response field "limit" should equal the response field "total"
     And the "products" list should have as many items as the response field "total"
+    And the response should match the "product_list" schema
 
   @edge
   Scenario: Skipping past the end returns an empty page
@@ -94,6 +100,7 @@ Feature: Products
     Then the response status code should be 200
     And the "products" list should be empty
     And the response field "limit" should be 0
+    And the response should match the "product_list" schema
 
   @positive
   Scenario: Search finds products by title or description
@@ -103,12 +110,14 @@ Feature: Products
     Then the response status code should be 200
     And the response field "total" should be greater than 0
     And every item in the "products" list should contain "phone" in any of "title, description", ignoring case
+    And the response should match the "product_list" schema
 
   @positive
   Scenario: Filter products by category
     When I send a GET request to "/products/category/smartphones"
     Then the response status code should be 200
     And every item in the "products" list should have "category" equal to "smartphones"
+    And the response should match the "product_list" schema
 
   @edge
   Scenario: Search ignores the case of the query
@@ -124,12 +133,14 @@ Feature: Products
     Then the response status code should be 200
     And the "products" list should be empty
     And the response field "total" should be 0
+    And the response should match the "product_list" schema
 
   @edge
   Scenario: An unknown category returns an empty list, not a 404
     When I send a GET request to "/products/category/flying-cars"
     Then the response status code should be 200
     And the "products" list should be empty
+    And the response should match the "product_list" schema
 
   @positive
   Scenario: Add a product
@@ -169,9 +180,11 @@ Feature: Products
       | price | 1     |
     Then the response status code should be 404
     And the response field "message" should be "Product with id '99999' not found"
+    And the response should match the "error" schema
 
   @negative
   Scenario: Deleting a product that does not exist returns 404
     When I send a DELETE request to "/products/99999"
     Then the response status code should be 404
     And the response field "message" should be "Product with id '99999' not found"
+    And the response should match the "error" schema

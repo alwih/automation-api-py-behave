@@ -1,6 +1,6 @@
 import parse
 from behave import given, when, then, step, register_type
-from api import assertions
+from api import assertions, schema
 from api.step_data import body_from_table, resolve
 
 @parse.with_pattern(r"GET|POST|PUT|PATCH|DELETE")
@@ -28,7 +28,8 @@ register_type(HttpMethod=parse_http_method, ItemList=parse_item_list,
 def use_service(context, service):
     assert service.lower() in context.clients, \
         f"Unknown service '{service}', expected one of {sorted(context.clients)}"
-    context.client = context.clients[service.lower()]
+    context.service = service.lower()
+    context.client = context.clients[context.service]
 
 @given('I send a {method:HttpMethod} request to "{endpoint}"')
 @when('I send a {method:HttpMethod} request to "{endpoint}"')
@@ -190,6 +191,14 @@ def check_body_equals_remembered(context):
 @then('the response fields "{fields}" should match the remembered body')
 def check_fields_match_remembered(context, fields):
     assertions.assert_fields_match(context.response.json(), context.remembered_body, split_list(fields))
+
+@then('the response should match the "{name}" schema')
+def check_schema(context, name):
+    schema.validate(context.response.json(), context.service, name)
+
+@then('every item in {items:ItemList} should match the "{name}" schema')
+def check_every_item_schema(context, items, name):
+    schema.validate_each(items_in(context, items), context.service, name)
 
 @then('the response should echo the request body')
 def check_echoes_request_body(context):

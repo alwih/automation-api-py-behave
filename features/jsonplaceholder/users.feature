@@ -15,14 +15,14 @@ Feature: Reading users
     And the response field "address.city" should be "Gwenborough"
     And the response field "address.geo.lat" should be "-37.3159"
     And the response field "address.geo.lng" should be "81.1496"
-    And the response field "company.name" should be a non-empty string
+    And the response should match the "user" schema
 
   @positive
   Scenario: Every user has a location and a company
     When I send a GET request to "/users"
     Then the response status code should be 200
     And the response body should be a list of 10 items
-    And every item in the response should have the fields "address.geo.lat, address.geo.lng, company.name"
+    And every item in the response should match the "user" schema
 
   @negative
   Scenario: Requesting a user beyond the last one returns 404

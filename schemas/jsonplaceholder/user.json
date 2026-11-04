@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JSONPlaceholder user",
+  "type": "object",
+  "required": ["id", "name", "username", "email", "address", "phone", "website", "company"],
+  "properties": {
+    "id": {"type": "integer", "minimum": 1},
+    "name": {"type": "string", "minLength": 1},
+    "username": {"type": "string", "minLength": 1},
+    "email": {"type": "string", "format": "email"},
+    "address": {
+      "type": "object",
+      "required": ["street", "suite", "city", "zipcode", "geo"],
+      "properties": {
+        "street": {"type": "string"},
+        "suite": {"type": "string"},
+        "city": {"type": "string"},
+        "zipcode": {"type": "string"},
+        "geo": {
+          "type": "object",
+          "required": ["lat", "lng"],
+          "properties": {
+            "lat": {"$ref": "#/$defs/coordinate"},
+            "lng": {"$ref": "#/$defs/coordinate"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "phone": {"type": "string", "minLength": 1},
+    "website": {"type": "string", "minLength": 1},
+    "company": {
+      "type": "object",
+      "required": ["name", "catchPhrase", "bs"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "catchPhrase": {"type": "string"},
+        "bs": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "coordinate": {
+      "description": "A decimal number sent as a string, e.g. \"-37.3159\"",
+      "type": "string",
+      "pattern": "^-?\\d+(\\.\\d+)?$"
+    }
+  }
+}

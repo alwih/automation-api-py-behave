@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DummyJSON login response",
+  "type": "object",
+  "required": ["accessToken", "refreshToken", "id", "username", "email", "firstName", "lastName", "gender", "image"],
+  "properties": {
+    "accessToken": {"$ref": "#/$defs/jwt"},
+    "refreshToken": {"$ref": "#/$defs/jwt"},
+    "id": {"type": "integer", "minimum": 1},
+    "username": {"type": "string", "minLength": 1},
+    "email": {"type": "string", "format": "email"},
+    "firstName": {"type": "string"},
+    "lastName": {"type": "string"},
+    "gender": {"type": "string"},
+    "image": {"type": "string", "format": "uri"}
+  },
+  "not": {
+    "description": "A login response must never include the password",
+    "required": ["password"]
+  },
+  "$defs": {
+    "jwt": {
+      "description": "Three base64url segments: header.payload.signature",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$"
+    }
+  }
+}
