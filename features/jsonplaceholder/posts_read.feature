@@ -13,16 +13,14 @@ Feature: Reading posts
     Then the response status code should be 200
     And the response header "Content-Type" should contain "application/json"
     And the response field "id" should be 1
-    And the response field "userId" should be an integer
-    And the response field "title" should be a non-empty string
-    And the response field "body" should be a non-empty string
+    And the response should match the "post" schema
 
   @positive
   Scenario: List all posts
     When I send a GET request to "/posts"
     Then the response status code should be 200
     And the response body should be a list of 100 items
-    And every item in the response should have the fields "userId, id, title, body"
+    And every item in the response should match the "post" schema
 
   @positive
   Scenario Outline: Filter posts by author <user_id> (<note>)
@@ -44,6 +42,7 @@ Feature: Reading posts
     And the response body should be a list of 5 items
     And every item in the response should have "postId" equal to 1
     And every item in the response should have "email" containing "@"
+    And every item in the response should match the "comment" schema
 
   @positive
   Scenario: Nested comments route matches the postId filter
