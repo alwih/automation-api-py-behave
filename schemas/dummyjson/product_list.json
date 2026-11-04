@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DummyJSON page of products",
+  "type": "object",
+  "required": ["products", "total", "skip", "limit"],
+  "properties": {
+    "products": {"type": "array", "items": {"$ref": "product.json"}},
+    "total": {"type": "integer", "minimum": 0},
+    "skip": {"type": "integer", "minimum": 0},
+    "limit": {"type": "integer", "minimum": 0}
+  }
+}

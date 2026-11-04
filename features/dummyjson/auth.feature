@@ -17,8 +17,8 @@ Feature: Authentication
     And the response field "accessToken" should be a JWT
     And the response field "refreshToken" should be a JWT
     And the response field "username" should be "{username}"
-    And the response field "id" should be an integer
     And the response should not contain "password"
+    And the response should match the "auth_login" schema
 
   @positive
   Scenario Outline: The access token lasts <minutes> minutes when asked to
@@ -71,6 +71,7 @@ Feature: Authentication
       | <field> | <value> |
     Then the response status code should be 400
     And the response field "message" should be "Invalid credentials"
+    And the response should match the "error" schema
 
     Examples:
       | case           | field    | value            |
@@ -84,6 +85,7 @@ Feature: Authentication
       | username | someone |
     Then the response status code should be 400
     And the response field "message" should be "Username and password required"
+    And the response should match the "error" schema
 
   @negative
   Scenario: Logging in with an empty body is rejected
@@ -91,12 +93,14 @@ Feature: Authentication
       | field | value |
     Then the response status code should be 400
     And the response field "message" should be "Username and password required"
+    And the response should match the "error" schema
 
   @negative
   Scenario: The profile endpoint requires a token
     When I send a GET request to "/auth/me"
     Then the response status code should be 401
     And the response field "message" should be "Access Token is required"
+    And the response should match the "error" schema
 
   @negative
   Scenario: The profile endpoint rejects a non-bearer token
@@ -104,6 +108,7 @@ Feature: Authentication
     When I send a GET request to "/auth/me"
     Then the response status code should be 401
     And the response field "message" should be "Invalid/Expired Token!"
+    And the response should match the "error" schema
 
   @negative
   Scenario: Refreshing without a refresh token is rejected
@@ -111,6 +116,7 @@ Feature: Authentication
       | field | value |
     Then the response status code should be 401
     And the response field "message" should be "Refresh token required"
+    And the response should match the "error" schema
 
   @negative
   Scenario: Refreshing with an invalid refresh token is rejected
@@ -119,12 +125,14 @@ Feature: Authentication
       | refreshToken | abc   |
     Then the response status code should be 403
     And the response field "message" should be "Invalid refresh token"
+    And the response should match the "error" schema
 
   @negative
   Scenario: A protected product route requires a token
     When I send a GET request to "/auth/products/1"
     Then the response status code should be 401
     And the response field "message" should be "Access Token is required"
+    And the response should match the "error" schema
 
   @edge
   Scenario: Usernames are matched without regard to case

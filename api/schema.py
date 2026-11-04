@@ -50,12 +50,19 @@ def _retrieve(uri):
 REGISTRY = Registry(retrieve=_retrieve)
 
 
+def _describe(error):
+    # A failed "not" would quote the whole response; its own description says more
+    if error.validator == "not" and "description" in error.validator_value:
+        return f"breaks rule: {error.validator_value['description']}"
+    return error.message
+
+
 def _check(instance, schema, label):
     validator = Draft202012Validator(schema, registry=REGISTRY,
                                      format_checker=Draft202012Validator.FORMAT_CHECKER)
     errors = sorted(validator.iter_errors(instance), key=lambda error: error.json_path)
     if errors:
-        lines = [f"  {error.json_path}: {error.message[:MESSAGE_LIMIT]}" for error in errors[:ERRORS_SHOWN]]
+        lines = [f"  {error.json_path}: {_describe(error)[:MESSAGE_LIMIT]}" for error in errors[:ERRORS_SHOWN]]
         if len(errors) > ERRORS_SHOWN:
             lines.append(f"  ... and {len(errors) - ERRORS_SHOWN} more")
         count = f"{len(errors)} error{'s' if len(errors) != 1 else ''}"
