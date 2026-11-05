@@ -5,6 +5,7 @@ from behave import fixture, use_fixture
 from api import auth
 from api.client import ApiClient, new_session
 from api.redaction import redact, register_secret
+from api.report import attach_exchange
 from config.settings import load_settings
 
 log = logging.getLogger("api")
@@ -60,6 +61,8 @@ def after_step(context, step):
             body = f"{body[:BODY_LOG_LIMIT]}... ({len(body)} chars total)"
         log.error("%s %s -> %s\n%s", response.request.method, response.request.url,
                   response.status_code, body)
+        # Untruncated request and response for the Allure report (ignored without -f allure)
+        attach_exchange(response)
 
 
 def after_scenario(context, scenario):
