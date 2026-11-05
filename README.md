@@ -2,7 +2,7 @@
 
 A simple, beginner-friendly API automation project using **Behave (BDD)** and **requests**, with **miniconda** for package management.
 
-It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Responses are also checked against JSON Schema contracts, and the helper code has its own pytest unit tests. Known API bugs, including three security issues, are recorded as scenarios that are skipped by default.
+It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Responses are also checked against JSON Schema contracts, and the helper code has its own pytest unit tests. Known API bugs, including three security issues, are recorded as scenarios that are skipped by default. Runs can produce an Allure report, with the request and response attached to every failed step, and JUnit XML for CI.
 
 ## Project Structure
 
@@ -15,7 +15,8 @@ automation_py_api/
 │   ├── tokens.py                  # JWT decoding (no signature check) and tampering for negative tests
 │   ├── schema.py                  # JSON Schema validation (Draft 2020-12, formats, $ref between files)
 │   ├── step_data.py               # "{name}" placeholders and data-table bodies
-│   └── redaction.py               # Hides the configured password in failure output
+│   ├── redaction.py               # Hides the configured password in failure output
+│   └── report.py                  # Request/response text for the Allure report, credentials masked
 ├── config/
 │   └── settings.py                # Base URLs, timeout and credentials from -D / env / .env / defaults
 ├── features/
@@ -26,7 +27,7 @@ automation_py_api/
 │   │   ├── posts_read.feature     # GET scenarios for posts and comments
 │   │   ├── posts_write.feature    # POST, PUT, PATCH, DELETE scenarios
 │   │   └── users.feature          # Nested user fields (address, company)
-│   ├── environment.py             # Hooks: settings, one client per API, @authenticated login, failure log
+│   ├── environment.py             # Hooks: settings, one client per API, @authenticated login, failure log and attachments
 │   └── steps/
 │       ├── api_steps.py           # Request and response steps (thin wrappers over api/)
 │       └── auth_steps.py          # Login, token and JWT steps
@@ -35,9 +36,11 @@ automation_py_api/
 │   └── jsonplaceholder/           # post, comment, user
 ├── tests/
 │   ├── conftest.py
-│   └── unit/                      # pytest: paths, sorting, JWTs, schemas, settings, data tables
+│   └── unit/                      # pytest: paths, sorting, JWTs, schemas, settings, data tables, report text
+├── reports/                       # Created by the make targets (git-ignored): Allure results and HTML, JUnit XML
 ├── .env.example                   # Template for a local .env (copy and edit)
-├── behave.ini                     # Behave defaults (paths, format, default tag filter)
+├── Makefile                       # Shortcuts: unit, smoke, regression, known-issues, report, clean
+├── behave.ini                     # Behave defaults (paths, format, default tag filter, report formatter)
 ├── pytest.ini                     # pytest defaults (tests/ folder, imports from the repo root)
 ├── environment.yml                # Conda environment (Python 3.11 + requirements)
 ├── requirements.txt               # Python dependencies (pinned)
@@ -67,6 +70,8 @@ Then the response status code should be 404
 - **Python 3.10+** (via miniconda or anaconda; `environment.yml` uses 3.11)
 - **Git** (to clone the repository)
 - **Internet connection** (to call the public API)
+- **make** (optional, for the shortcuts below; preinstalled on macOS and most Linux systems)
+- **Allure Report 2** (optional, only to view the HTML report): `brew install allure` on macOS; it needs Java 8 or later
 
 ## Setup Instructions
 
@@ -181,6 +186,34 @@ The helper code under `api/` and `config/` has pytest unit tests. They need no n
 pytest
 ```
 
+### Make Shortcuts and Reports
+
+The `Makefile` wraps the common runs. Its behave targets also write Allure results and JUnit XML under `reports/`, after clearing the files from the previous run:
+
+| Command | What it does |
+|---|---|
+| `make unit` | Runs `pytest` |
+| `make smoke` | Runs the `@smoke` scenarios |
+| `make regression` | Runs every `@regression` scenario except known issues and work in progress |
+| `make known-issues` | Runs only `@known_issue`; it exits with an error for as long as the bugs exist |
+| `make report` | Builds `reports/allure-report` from the last run and opens it in the browser (Ctrl+C stops it) |
+| `make clean` | Deletes `reports/` |
+
+```bash
+make regression
+make report
+```
+
+Run `make report` as a separate command: when a scenario fails, `make regression report` stops before building the report.
+
+The Allure report shows each scenario with its steps and tags. A failed step also has the full request and response attached, pretty-printed, with the password, the `Authorization` token and cookies masked. The JUnit XML (one file per feature in `reports/junit/`) is the format CI servers read.
+
+The same reports without make. behave pairs each `-o` with the `-f` in the same position, so put `allure` first:
+
+```bash
+behave -f allure -o reports/allure-results -f pretty --junit
+```
+
 ## What Gets Tested
 
 **Reading posts** ([posts_read.feature](features/jsonplaceholder/posts_read.feature)) - 16 scenarios, counting each Examples row:
@@ -271,7 +304,7 @@ Each feature's `Background` picks its API client (`Given the JSONPlaceholder API
 
 `product_list` reuses `product.json` through `$ref`, `auth_login` states that a login must never return a password, and every DummyJSON 4xx scenario checks the `error` shape. Each schema was validated against every record the API returns (100 posts, 500 comments, 10 users, 194 products).
 
-**Unit tests** ([tests/unit/](tests/unit)) - pytest cases for the dotted-path getter, the sort check, JWT decoding, schema loading and its error messages, settings precedence, placeholders and data tables, and secret redaction. One test also checks that the `date-time`, `uri` and `email` formats are really enforced: `jsonschema` silently skips a format whose helper library is missing.
+**Unit tests** ([tests/unit/](tests/unit)) - pytest cases for the dotted-path getter, the sort check, JWT decoding, schema loading and its error messages, settings precedence, placeholders and data tables, secret redaction, and the request/response text attached to the Allure report. One test also checks that the `date-time`, `uri` and `email` formats are really enforced: `jsonschema` silently skips a format whose helper library is missing.
 
 ## Modifying Test Data
 
@@ -337,11 +370,14 @@ The read scenarios keep their inputs in the feature file too. To try another id 
 conda env list  # Check if api_automation exists
 ```
 
-**Import errors?**
+**Import errors, e.g. `No module named 'allure'` after pulling new changes?**
 ```bash
 conda activate api_automation
-pip install -r requirements.txt --force-reinstall
+conda env update -f environment.yml --prune
 ```
+
+**`make: behave: No such file or directory` (or `pytest`)?**
+- The environment isn't active in that terminal. Run `conda activate api_automation` first.
 
 **`ModuleNotFoundError: No module named 'config'` (or `'api'`)?**
 - Run `behave` from the repository root, not from inside `features/`
@@ -360,6 +396,16 @@ pip install -r requirements.txt --force-reinstall
 
 **Reading a failure**
 - When a step fails, the log line above the error shows the last request and response, e.g. `LOG_ERROR:api: PUT https://jsonplaceholder.typicode.com/posts/9999 -> 500`, followed by the first 500 characters of the body.
+- For the whole exchange, run through a make target and open `make report`: the failed step has `Request` and `Response` attachments with headers and the full body.
+
+**`make: allure: No such file or directory`?**
+- The Allure command-line tool isn't installed: `brew install allure` (see Prerequisites). The tests and the files in `reports/` don't need it, only the HTML report does.
+
+**`TypeError: expected str, bytes or os.PathLike object, not NoneType` with `-f allure`?**
+- The Allure formatter needs a results folder: `-f allure -o reports/allure-results`.
+
+**The Allure report is empty, or `reports/allure-report/index.html` won't load when opened directly?**
+- `make report` reads the last make run, so run `make smoke` or `make regression` first. The HTML report has to be served by a web server, so open it with `make report` or `allure open reports/allure-report`, not by double-clicking the file.
 
 **Dependency install fails on an older environment?**
 - `requests` 2.34 needs Python 3.10+. Recreate the environment:
@@ -387,7 +433,7 @@ conda env create -f environment.yml
 
 ## Next Steps
 
-- Add Allure/JUnit reporting and a GitHub Actions pipeline
+- Run the tests in a GitHub Actions pipeline and keep the JUnit and Allure results from each run
 
 ## Learning Resources
 
@@ -408,3 +454,6 @@ conda env create -f environment.yml
 - [Understanding JSON Schema](https://json-schema.org/understanding-json-schema/)
 - [jsonschema: validating formats](https://python-jsonschema.readthedocs.io/en/stable/validate/#validating-formats)
 - [pytest documentation](https://docs.pytest.org/en/stable/)
+- [Allure Report for behave](https://allurereport.org/docs/behave/) and [installing Allure Report 2](https://allurereport.org/docs/v2/install/)
+- [Behave formatters and reporters](https://behave.readthedocs.io/en/latest/appendix.formatters/) and the [`--junit` option](https://behave.readthedocs.io/en/latest/behave/#cmdoption-junit)
+- [GNU make manual](https://www.gnu.org/software/make/manual/make.html)
