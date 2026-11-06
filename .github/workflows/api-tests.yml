@@ -1,0 +1,49 @@
+name: API tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run per branch at a time; a new push to a pull request replaces its running check
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    # A single job on purpose: the scenarios share DummyJSON's rate limit, so they run one after another
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DUMMYJSON_USERNAME: ${{ secrets.DUMMYJSON_USERNAME }}
+      DUMMYJSON_PASSWORD: ${{ secrets.DUMMYJSON_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Unit tests
+        run: make unit
+
+      - name: Check DummyJSON credentials
+        run: |
+          if [ -z "$DUMMYJSON_USERNAME" ] || [ -z "$DUMMYJSON_PASSWORD" ]; then
+            echo "::error::Add the DUMMYJSON_USERNAME and DUMMYJSON_PASSWORD repository secrets (Settings > Secrets and variables > Actions)"
+            exit 1
+          fi
+
+      - name: Smoke
+        run: make smoke
+
+      - name: Regression
+        run: make regression
