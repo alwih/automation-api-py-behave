@@ -1,13 +1,17 @@
 # Python API Automation Testing
 
+[![API tests](https://github.com/alwih/automation-api-py-behave/actions/workflows/api-tests.yml/badge.svg)](https://github.com/alwih/automation-api-py-behave/actions/workflows/api-tests.yml)
+
 A simple, beginner-friendly API automation project using **Behave (BDD)** and **requests**, with **miniconda** for package management.
 
-It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Responses are also checked against JSON Schema contracts, and the helper code has its own pytest unit tests. Known API bugs, including three security issues, are recorded as scenarios that are skipped by default. Runs can produce an Allure report, with the request and response attached to every failed step, and JUnit XML for CI.
+It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Responses are also checked against JSON Schema contracts, and the helper code has its own pytest unit tests. Known API bugs, including three security issues, are recorded as scenarios that are skipped by default. Runs can produce an Allure report, with the request and response attached to every failed step, and JUnit XML. GitHub Actions runs everything on each pull request, on pushes to `main` and every night.
 
 ## Project Structure
 
 ```
 automation_py_api/
+├── .github/workflows/
+│   └── api-tests.yml              # CI: unit tests, smoke, regression; nightly and manual runs
 ├── api/
 │   ├── client.py                  # ApiClient + cookie-free session: base URL, timeout, headers, UTF-8 JSON
 │   ├── assertions.py              # Response checks with dotted-path field access
@@ -34,12 +38,14 @@ automation_py_api/
 ├── schemas/
 │   ├── dummyjson/                 # product, product_list, auth_login, error
 │   └── jsonplaceholder/           # post, comment, user
+├── scripts/
+│   └── junit_summary.py           # Turns the JUnit XML into the summary table on the CI run page
 ├── tests/
 │   ├── conftest.py
-│   └── unit/                      # pytest: paths, sorting, JWTs, schemas, settings, data tables, report text
+│   └── unit/                      # pytest: paths, sorting, JWTs, schemas, settings, data tables, reports
 ├── reports/                       # Created by the make targets (git-ignored): Allure results and HTML, JUnit XML
 ├── .env.example                   # Template for a local .env (copy and edit)
-├── Makefile                       # Shortcuts: unit, smoke, regression, known-issues, report, clean
+├── Makefile                       # Shortcuts: unit, smoke, regression, known-issues, tagged, report, clean
 ├── behave.ini                     # Behave defaults (paths, format, default tag filter, report formatter)
 ├── pytest.ini                     # pytest defaults (tests/ folder, imports from the repo root)
 ├── environment.yml                # Conda environment (Python 3.11 + requirements)
@@ -196,6 +202,7 @@ The `Makefile` wraps the common runs. Its behave targets also write Allure resul
 | `make smoke` | Runs the `@smoke` scenarios |
 | `make regression` | Runs every `@regression` scenario except known issues and work in progress |
 | `make known-issues` | Runs only `@known_issue`; it exits with an error for as long as the bugs exist |
+| `make tagged TAGS="@dummyjson and {config.tags}"` | Runs any tag expression |
 | `make report` | Builds `reports/allure-report` from the last run and opens it in the browser (Ctrl+C stops it) |
 | `make clean` | Deletes `reports/` |
 
@@ -213,6 +220,23 @@ The same reports without make. behave pairs each `-o` with the `-f` in the same 
 ```bash
 behave -f allure -o reports/allure-results -f pretty --junit
 ```
+
+### Continuous Integration
+
+[.github/workflows/api-tests.yml](.github/workflows/api-tests.yml) runs on every pull request, on each push to `main`, every night at 02:30 UTC, and on demand. It is a single job, so only one set of scenarios at a time counts against DummyJSON's rate limit:
+
+1. Install the pinned requirements on Python 3.11 (pip downloads are cached)
+2. `make unit`
+3. Check that the DummyJSON credentials are set
+4. `make smoke`, a quick check that both APIs answer
+5. `make tagged` with `@regression and {config.tags}`, unless a manual run picks other tags
+6. Even when a step failed: write a summary table to the run page (scenarios per feature, and each failure with its file and line), and upload the `junit` and `allure-results` folders as artifacts, kept for 14 days
+
+The nightly run catches changes in the public APIs between commits. To start a run by hand, open **Actions → API tests → Run workflow** and enter a tag expression, e.g. `@known_issue` to see whether the documented bugs are still there. A new push to a pull request cancels its run that is still in progress.
+
+The auth scenarios need two repository secrets, set under **Settings → Secrets and variables → Actions**: `DUMMYJSON_USERNAME` and `DUMMYJSON_PASSWORD`. The public demo account from `.env.example` works. GitHub hides secret values in the logs.
+
+To browse a CI run in Allure, download its `allure-results` artifact, unzip it and run `allure serve <folder>`.
 
 ## What Gets Tested
 
@@ -304,7 +328,7 @@ Each feature's `Background` picks its API client (`Given the JSONPlaceholder API
 
 `product_list` reuses `product.json` through `$ref`, `auth_login` states that a login must never return a password, and every DummyJSON 4xx scenario checks the `error` shape. Each schema was validated against every record the API returns (100 posts, 500 comments, 10 users, 194 products).
 
-**Unit tests** ([tests/unit/](tests/unit)) - pytest cases for the dotted-path getter, the sort check, JWT decoding, schema loading and its error messages, settings precedence, placeholders and data tables, secret redaction, and the request/response text attached to the Allure report. One test also checks that the `date-time`, `uri` and `email` formats are really enforced: `jsonschema` silently skips a format whose helper library is missing.
+**Unit tests** ([tests/unit/](tests/unit)) - pytest cases for the dotted-path getter, the sort check, JWT decoding, schema loading and its error messages, settings precedence, placeholders and data tables, secret redaction, the request/response text attached to the Allure report, and the CI summary table. One test also checks that the `date-time`, `uri` and `email` formats are really enforced: `jsonschema` silently skips a format whose helper library is missing.
 
 ## Modifying Test Data
 
@@ -323,7 +347,7 @@ Settings live in [config/settings.py](config/settings.py). Each one is taken fro
 | `DUMMYJSON_USERNAME` | none | DummyJSON login (auth scenarios) |
 | `DUMMYJSON_PASSWORD` | none | DummyJSON login (auth scenarios); hidden as `***` in failure output |
 
-The credentials have no default on purpose. To use the public DummyJSON demo account, copy the template; `.env` is git-ignored:
+The credentials have no default on purpose; CI reads them from repository secrets (see Continuous Integration). To use the public DummyJSON demo account locally, copy the template; `.env` is git-ignored:
 
 ```bash
 cp .env.example .env
@@ -407,6 +431,15 @@ conda env update -f environment.yml --prune
 **The Allure report is empty, or `reports/allure-report/index.html` won't load when opened directly?**
 - `make report` reads the last make run, so run `make smoke` or `make regression` first. The HTML report has to be served by a web server, so open it with `make report` or `allure open reports/allure-report`, not by double-clicking the file.
 
+**CI fails at "Check DummyJSON credentials"?**
+- The repository secrets `DUMMYJSON_USERNAME` and `DUMMYJSON_PASSWORD` are missing; add them as described in Continuous Integration. Pull requests from forks never receive secrets, so their runs stop here too.
+
+**The CI summary shows scenarios as "not run"?**
+- A hook stopped them before they started, usually the `@authenticated` login (for example, a wrong password in the secrets). The `HOOK-ERROR` line in the job log has the reason.
+
+**The nightly run stopped?**
+- GitHub disables scheduled workflows in a public repository after 60 days without activity. Enable it again on the **Actions** tab (API tests → Enable workflow). Scheduled runs can also start late when GitHub Actions is busy.
+
 **Dependency install fails on an older environment?**
 - `requests` 2.34 needs Python 3.10+. Recreate the environment:
 ```bash
@@ -433,7 +466,11 @@ conda env create -f environment.yml
 
 ## Next Steps
 
-- Run the tests in a GitHub Actions pipeline and keep the JUnit and Allure results from each run
+- Publish the Allure report, with its history, to GitHub Pages from the nightly run
+- Retry idempotent requests (GET, PUT, DELETE) on 429 and 5xx responses, with backoff
+- Lint and format with ruff, run through pre-commit hooks
+- Run scenarios in parallel with behavex
+- Add a response-time check that runs outside the pull request checks
 
 ## Learning Resources
 
@@ -457,3 +494,6 @@ conda env create -f environment.yml
 - [Allure Report for behave](https://allurereport.org/docs/behave/) and [installing Allure Report 2](https://allurereport.org/docs/v2/install/)
 - [Behave formatters and reporters](https://behave.readthedocs.io/en/latest/appendix.formatters/) and the [`--junit` option](https://behave.readthedocs.io/en/latest/behave/#cmdoption-junit)
 - [GNU make manual](https://www.gnu.org/software/make/manual/make.html)
+- [GitHub Actions workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax) and [events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
+- [Using secrets in GitHub Actions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets) and [manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+- [Storing workflow data as artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data) and [job summaries](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary)

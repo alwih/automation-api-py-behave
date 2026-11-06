@@ -6,7 +6,7 @@ HTML_REPORT := reports/allure-report
 # Pretty console output, plus Allure results and JUnit XML (reports/junit, set in behave.ini)
 REPORTING := -f allure -o $(RESULTS) -f pretty --junit
 
-.PHONY: unit smoke regression known-issues report clean
+.PHONY: unit smoke regression known-issues tagged report clean
 
 unit:
 	pytest
@@ -20,6 +20,10 @@ regression: clean
 # Fails while the bugs are still there: each scenario asserts the correct behaviour
 known-issues: clean
 	behave $(REPORTING) --tags=@known_issue
+
+# Any tag expression, read from TAGS: make tagged TAGS="@dummyjson and {config.tags}"
+tagged: clean
+	behave $(REPORTING) --tags="$${TAGS:?set it, e.g. make tagged TAGS=@dummyjson}"
 
 # Needs the Allure command-line tool; "allure open" serves the report until Ctrl+C
 report:
