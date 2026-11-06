@@ -58,3 +58,27 @@ jobs:
 
       - name: Scenarios (${{ env.TAGS }})
         run: make tagged
+
+      # The steps below also run after a failure, which is when the reports matter most
+
+      - name: Job summary
+        if: ${{ !cancelled() }}
+        run: python scripts/junit_summary.py reports/junit >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload JUnit XML
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit
+          path: reports/junit
+          retention-days: 14
+          overwrite: true  # a re-run of the job replaces the files instead of failing on the name
+
+      - name: Upload Allure results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: allure-results
+          path: reports/allure-results
+          retention-days: 14
+          overwrite: true
