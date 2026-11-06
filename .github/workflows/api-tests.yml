@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Nightly, to catch changes in the public APIs between commits
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Behave tag expression, e.g. @dummyjson or @known_issue"
+        default: "@regression and {config.tags}"
 
 permissions:
   contents: read
@@ -21,6 +29,9 @@ jobs:
     env:
       DUMMYJSON_USERNAME: ${{ secrets.DUMMYJSON_USERNAME }}
       DUMMYJSON_PASSWORD: ${{ secrets.DUMMYJSON_PASSWORD }}
+      # A manual run picks its scenarios; every other run is the full regression.
+      # make reads it from the environment, so the input is never pasted into a shell command.
+      TAGS: ${{ inputs.tags || '@regression and {config.tags}' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -45,5 +56,5 @@ jobs:
       - name: Smoke
         run: make smoke
 
-      - name: Regression
-        run: make regression
+      - name: Scenarios (${{ env.TAGS }})
+        run: make tagged
