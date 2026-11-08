@@ -6,7 +6,11 @@ HTML_REPORT := reports/allure-report
 # Pretty console output, plus Allure results and JUnit XML (reports/junit, set in behave.ini)
 REPORTING := -f allure -o $(RESULTS) -f pretty --junit
 
-.PHONY: unit smoke regression known-issues tagged report clean
+.PHONY: lint unit smoke regression known-issues tagged report clean
+
+# Whitespace, JSON/YAML/TOML syntax, ruff and mypy on every file (the same hooks run on each commit)
+lint:
+	pre-commit run --all-files
 
 unit:
 	pytest
