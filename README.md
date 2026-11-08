@@ -1,17 +1,19 @@
 # Python API Automation Testing
 
 [![API tests](https://github.com/alwih/automation-api-py-behave/actions/workflows/api-tests.yml/badge.svg)](https://github.com/alwih/automation-api-py-behave/actions/workflows/api-tests.yml)
+[![Lint](https://github.com/alwih/automation-api-py-behave/actions/workflows/lint.yml/badge.svg)](https://github.com/alwih/automation-api-py-behave/actions/workflows/lint.yml)
 
 A simple, beginner-friendly API automation project using **Behave (BDD)** and **requests**, with **miniconda** for package management.
 
-It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Responses are also checked against JSON Schema contracts, and the helper code has its own pytest unit tests. Known API bugs, including three security issues, are recorded as scenarios that are skipped by default. Runs can produce an Allure report, with the request and response attached to every failed step, and JUnit XML. GitHub Actions runs everything on each pull request, on pushes to `main` and every night.
+It tests two public APIs with positive, negative and edge-case scenarios: posts and users on [JSONPlaceholder](https://jsonplaceholder.typicode.com/), and the product catalogue and JWT authentication on [DummyJSON](https://dummyjson.com/docs) (lookup, pagination, sorting, search, simulated writes, login, protected routes, token refresh). Responses are also checked against JSON Schema contracts, and the helper code has its own pytest unit tests. Known API bugs, including three security issues, are recorded as scenarios that are skipped by default. Runs can produce an Allure report, with the request and response attached to every failed step, and JUnit XML. GitHub Actions runs everything on each pull request, on pushes to `main` and every night. The code is linted and formatted with ruff and type-checked with mypy, through pre-commit hooks that run before each commit and again in CI.
 
 ## Project Structure
 
 ```
 automation_py_api/
 ├── .github/workflows/
-│   └── api-tests.yml              # CI: unit tests, smoke, regression; nightly and manual runs
+│   ├── api-tests.yml              # CI: unit tests, smoke, regression; nightly and manual runs
+│   └── lint.yml                   # CI: the pre-commit hooks (file checks, ruff, mypy) on pushes and pull requests
 ├── api/
 │   ├── client.py                  # ApiClient + cookie-free session: base URL, timeout, headers, UTF-8 JSON
 │   ├── assertions.py              # Response checks with dotted-path field access
@@ -45,11 +47,15 @@ automation_py_api/
 │   └── unit/                      # pytest: paths, sorting, JWTs, schemas, settings, data tables, reports
 ├── reports/                       # Created by the make targets (git-ignored): Allure results and HTML, JUnit XML
 ├── .env.example                   # Template for a local .env (copy and edit)
-├── Makefile                       # Shortcuts: unit, smoke, regression, known-issues, tagged, report, clean
+├── .pre-commit-config.yaml        # Hooks run before each commit: file checks, ruff, mypy
+├── .git-blame-ignore-revs         # Formatting-only commits for git blame to skip
+├── Makefile                       # Shortcuts: lint, unit, smoke, regression, known-issues, tagged, report, clean
 ├── behave.ini                     # Behave defaults (paths, format, default tag filter, report formatter)
 ├── pytest.ini                     # pytest defaults (tests/ folder, imports from the repo root)
-├── environment.yml                # Conda environment (Python 3.11 + requirements)
-├── requirements.txt               # Python dependencies (pinned)
+├── pyproject.toml                 # ruff and mypy settings
+├── environment.yml                # Conda environment (Python 3.11 + requirements-dev.txt)
+├── requirements.txt               # Python dependencies for running the tests (pinned)
+├── requirements-dev.txt           # requirements.txt plus ruff, mypy, pre-commit and type stubs (pinned)
 ├── .gitignore                     # Files kept out of version control
 └── README.md                      # This file
 ```
@@ -97,7 +103,7 @@ brew install --cask miniconda
 git clone https://github.com/alwih/automation-api-py-behave.git
 cd automation-api-py-behave
 
-# Create the 'api_automation' environment (Python 3.11 + requirements.txt)
+# Create the 'api_automation' environment (Python 3.11 + requirements-dev.txt)
 conda env create -f environment.yml
 
 # Activate the environment
@@ -106,7 +112,7 @@ conda activate api_automation
 
 ### 3. Install Dependencies
 
-`environment.yml` already installs everything in `requirements.txt`. When the pinned versions change, update the existing environment instead of recreating it:
+`environment.yml` already installs everything in `requirements-dev.txt`: the test dependencies from `requirements.txt` plus the lint and type-check tools. When the pinned versions change, update the existing environment instead of recreating it:
 
 ```bash
 conda env update -f environment.yml --prune
@@ -117,13 +123,19 @@ Not using conda? Any Python 3.10+ virtual environment works:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt  # or requirements.txt, to only run the tests
 ```
 
 Then create your local settings file. The DummyJSON login scenarios need the credentials in it:
 
 ```bash
 cp .env.example .env
+```
+
+Optionally, install the git hooks, so the lint and type checks run on the staged files before each commit:
+
+```bash
+pre-commit install
 ```
 
 ## Running the Tests
@@ -192,12 +204,31 @@ The helper code under `api/` and `config/` has pytest unit tests. They need no n
 pytest
 ```
 
+### Lint and Type Checks
+
+ruff lints and formats every Python file, and mypy type-checks `api/` and `config/` in strict mode. Both are configured in `pyproject.toml` and run as pre-commit hooks, together with checks for trailing whitespace, missing final newlines, JSON/YAML/TOML syntax (including the schema files), merge-conflict markers and large files:
+
+```bash
+# Every hook on every file (same as make lint)
+pre-commit run --all-files
+
+# The tools on their own
+ruff check .
+ruff format .
+mypy
+```
+
+The ruff and mypy hooks run the versions installed from `requirements-dev.txt`, so the editor, the hooks and CI use the same ones. When a hook fixes something itself (whitespace, import order, formatting), the commit stops: review the change, `git add` it and commit again.
+
+Formatting-only commits are listed in `.git-blame-ignore-revs`, which GitHub's blame view skips. To skip them in a local `git blame` too, run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once.
+
 ### Make Shortcuts and Reports
 
 The `Makefile` wraps the common runs. Its behave targets also write Allure results and JUnit XML under `reports/`, after clearing the files from the previous run:
 
 | Command | What it does |
 |---|---|
+| `make lint` | Runs every pre-commit hook on every file: file checks, ruff, mypy |
 | `make unit` | Runs `pytest` |
 | `make smoke` | Runs the `@smoke` scenarios |
 | `make regression` | Runs every `@regression` scenario except known issues and work in progress |
@@ -237,6 +268,8 @@ The nightly run catches changes in the public APIs between commits. To start a r
 The auth scenarios need two repository secrets, set under **Settings → Secrets and variables → Actions**: `DUMMYJSON_USERNAME` and `DUMMYJSON_PASSWORD`. The public demo account from `.env.example` works. GitHub hides secret values in the logs.
 
 To browse a CI run in Allure, download its `allure-results` artifact, unzip it and run `allure serve <folder>`.
+
+A second workflow, [.github/workflows/lint.yml](.github/workflows/lint.yml), runs `pre-commit run --all-files` on every pull request and push to `main`. It makes no API calls, so it runs next to the API tests; the hook environments are cached between runs.
 
 ## What Gets Tested
 
@@ -403,6 +436,12 @@ conda env update -f environment.yml --prune
 **`make: behave: No such file or directory` (or `pytest`)?**
 - The environment isn't active in that terminal. Run `conda activate api_automation` first.
 
+**``Executable `ruff` not found`` (or `mypy`) when committing?**
+- The hooks use the tools from the active environment. Run `conda activate api_automation`, or `pip install -r requirements-dev.txt` in your virtual environment, and commit again.
+
+**A commit stops with `files were modified by this hook`?**
+- A hook fixed whitespace, import order or formatting. Check the change with `git diff`, then `git add` the files and commit again.
+
 **`ModuleNotFoundError: No module named 'config'` (or `'api'`)?**
 - Run `behave` from the repository root, not from inside `features/`
 
@@ -468,7 +507,6 @@ conda env create -f environment.yml
 
 - Publish the Allure report, with its history, to GitHub Pages from the nightly run
 - Retry idempotent requests (GET, PUT, DELETE) on 429 and 5xx responses, with backoff
-- Lint and format with ruff, run through pre-commit hooks
 - Run scenarios in parallel with behavex
 - Add a response-time check that runs outside the pull request checks
 
@@ -494,6 +532,10 @@ conda env create -f environment.yml
 - [Allure Report for behave](https://allurereport.org/docs/behave/) and [installing Allure Report 2](https://allurereport.org/docs/v2/install/)
 - [Behave formatters and reporters](https://behave.readthedocs.io/en/latest/appendix.formatters/) and the [`--junit` option](https://behave.readthedocs.io/en/latest/behave/#cmdoption-junit)
 - [GNU make manual](https://www.gnu.org/software/make/manual/make.html)
+- [Ruff](https://docs.astral.sh/ruff/): [rules](https://docs.astral.sh/ruff/rules/) and [formatter](https://docs.astral.sh/ruff/formatter/)
+- [mypy `--strict`](https://mypy.readthedocs.io/en/stable/command_line.html#cmdoption-mypy-strict) and the [type hints cheat sheet](https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html)
+- [pre-commit](https://pre-commit.com/) and [pre-commit-hooks](https://github.com/pre-commit/pre-commit-hooks)
+- [Ignoring commits in GitHub's blame view](https://docs.github.com/en/repositories/working-with-files/using-files/viewing-and-understanding-files#ignore-commits-in-the-blame-view)
 - [GitHub Actions workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax) and [events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
 - [Using secrets in GitHub Actions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets) and [manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 - [Storing workflow data as artifacts](https://docs.github.com/en/actions/tutorials/store-and-share-data) and [job summaries](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary)
