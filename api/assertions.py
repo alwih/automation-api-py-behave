@@ -5,6 +5,7 @@ numeric part indexes a list, so "products.0.id" is the first product's id.
 """
 import functools
 from datetime import datetime
+from itertools import pairwise
 
 from api.redaction import redact
 from api.tokens import decode_jwt
@@ -170,7 +171,7 @@ def assert_every_item_mentions(body, paths, text):
 def assert_sorted(body, path, descending=False):
     values = [field(item, path) for item in non_empty_list(body)]
     # Equal neighbours are fine; only a strictly out-of-order pair fails
-    for index, (current, following) in enumerate(zip(values, values[1:])):
+    for index, (current, following) in enumerate(pairwise(values)):
         in_order = current >= following if descending else current <= following
         assert in_order, (f"{path} not {'descending' if descending else 'ascending'} "
                           f"at items {index} and {index + 1}: {current!r} then {following!r}")

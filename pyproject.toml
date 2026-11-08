@@ -1,0 +1,30 @@
+# Tool settings only; behave.ini and pytest.ini keep their own
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # import order
+    "B",       # likely bugs
+    "UP",      # newer syntax for the target Python
+    "SIM",     # simpler equivalents
+    "PT",      # pytest style
+    "RUF",     # ruff's own rules
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["api", "config"]
+
+[tool.ruff.lint.per-file-ignores]
+# The checks in api/ are runtime assertions with one message for the whole condition, not pytest tests
+"api/**" = ["PT018"]
+# The JUnit XML samples keep behave's layout of one element per line
+"tests/unit/test_junit_summary.py" = ["E501"]
+
+[tool.ruff.lint.flake8-pytest-style]
+# The tests use the "name, expected" form from the pytest docs
+parametrize-names-type = "csv"

@@ -1,7 +1,9 @@
 import parse
-from behave import given, when, then, step, register_type
+from behave import given, register_type, step, then, when
+
 from api import assertions, schema
 from api.step_data import body_from_table, resolve
+
 
 @parse.with_pattern(r"GET|POST|PUT|PATCH|DELETE")
 def parse_http_method(text):

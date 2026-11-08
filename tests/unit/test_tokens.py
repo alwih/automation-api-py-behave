@@ -49,5 +49,5 @@ def test_tamper_signature_always_changes_the_first_character(signature, expected
 def test_jwt_lifetime_check_compares_exp_minus_iat():
     token = make_jwt({"iat": 1000, "exp": 1060})
     assertions.assert_jwt_lifetime(token, 60)
-    with pytest.raises(AssertionError, match="last 1800s .* but it lasts 60s"):
+    with pytest.raises(AssertionError, match=r"last 1800s .* but it lasts 60s"):
         assertions.assert_jwt_lifetime(token, 1800)

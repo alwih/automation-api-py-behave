@@ -39,7 +39,7 @@ def test_get_path_raises_key_error_for_missing_paths(path):
 
 
 def test_field_reports_a_missing_path_as_a_failed_check():
-    with pytest.raises(AssertionError, match="'address.zip' not found: no 'zip'"):
+    with pytest.raises(AssertionError, match=r"'address\.zip' not found: no 'zip'"):
         assertions.field(USER, "address.zip")
 
 

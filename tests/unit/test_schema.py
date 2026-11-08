@@ -81,7 +81,8 @@ def test_errors_list_each_path_including_format_failures(schema_dir):
 
 def test_ref_to_a_sibling_file_is_resolved(schema_dir):
     write(schema_dir, "item", ITEM)
-    write(schema_dir, "page", {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "item.json"}}}})
+    page = {"type": "object", "properties": {"items": {"type": "array", "items": {"$ref": "item.json"}}}}
+    write(schema_dir, "page", page)
     with pytest.raises(AssertionError, match=r"\$\.items\[1\]\.site: 'not a uri' is not a 'uri'"):
         schema.validate({"items": [GOOD, {**GOOD, "site": "not a uri"}]}, "svc", "page")
 
@@ -103,7 +104,8 @@ def test_long_error_lists_are_capped(schema_dir):
 
 
 def test_a_failed_not_rule_shows_its_description(schema_dir):
-    write(schema_dir, "login", {"type": "object", "not": {"description": "Never include the password", "required": ["password"]}})
+    login = {"type": "object", "not": {"description": "Never include the password", "required": ["password"]}}
+    write(schema_dir, "login", login)
     with pytest.raises(AssertionError, match="breaks rule: Never include the password"):
         schema.validate({"password": "x"}, "svc", "login")
 

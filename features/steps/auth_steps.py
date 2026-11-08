@@ -1,7 +1,8 @@
-from behave import given, when, then
+from behave import given, then, when
 
 from api import assertions, auth, tokens
 from api.step_data import body_from_table
+
 
 def send_login(context, **overrides):
     username, password = auth.credentials(context.settings)
