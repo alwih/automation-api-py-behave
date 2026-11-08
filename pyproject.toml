@@ -28,3 +28,8 @@ known-first-party = ["api", "config"]
 [tool.ruff.lint.flake8-pytest-style]
 # The tests use the "name, expected" form from the pytest docs
 parametrize-names-type = "csv"
+
+[tool.mypy]
+files = ["api", "config"]
+python_version = "3.10"
+strict = true
