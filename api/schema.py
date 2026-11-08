@@ -53,8 +53,10 @@ REGISTRY = Registry(retrieve=_retrieve)
 
 def _describe(error):
     # A failed "not" would quote the whole response; its own description says more
-    if error.validator == "not" and "description" in error.validator_value:
-        return f"breaks rule: {error.validator_value['description']}"
+    # (a "not" can also hold a boolean schema, which has no description)
+    rule = error.validator_value
+    if error.validator == "not" and isinstance(rule, dict) and "description" in rule:
+        return f"breaks rule: {rule['description']}"
     return error.message
 
 

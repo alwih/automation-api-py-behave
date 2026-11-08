@@ -110,6 +110,13 @@ def test_a_failed_not_rule_shows_its_description(schema_dir):
         schema.validate({"password": "x"}, "svc", "login")
 
 
+def test_a_failed_boolean_not_rule_is_reported_not_crashed(schema_dir):
+    # {"not": true} rejects everything and has no description to show
+    write(schema_dir, "never", {"not": True})
+    with pytest.raises(AssertionError, match=r"\$: .* should not be valid under True"):
+        schema.validate({"a": 1}, "svc", "never")
+
+
 def test_error_messages_hide_registered_secrets(schema_dir):
     write(schema_dir, "item", ITEM)
     register_secret("hunter2")
