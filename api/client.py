@@ -28,5 +28,4 @@ class ApiClient:
             # requests' json= escapes non-ASCII as \uXXXX; send real UTF-8 bytes instead
             kwargs["data"] = json.dumps(json_body, ensure_ascii=False).encode("utf-8")
             headers["Content-Type"] = "application/json; charset=utf-8"
-        return self.session.request(method, self.base_url + path, headers=headers,
-                                    timeout=self.timeout, **kwargs)
+        return self.session.request(method, self.base_url + path, headers=headers, timeout=self.timeout, **kwargs)

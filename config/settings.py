@@ -6,6 +6,7 @@ Each setting is looked up in this order; the first non-empty value wins:
   3. the .env file in the repository root (copy .env.example)
   4. DEFAULTS below
 """
+
 import os
 from dataclasses import dataclass, field
 from pathlib import Path

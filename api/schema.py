@@ -3,6 +3,7 @@
 Schemas are Draft 2020-12 and formats are checked ("date-time", "email",
 "uri", ...). A schema can point at a sibling file with {"$ref": "product.json"}.
 """
+
 import functools
 import json
 from pathlib import Path
@@ -58,8 +59,7 @@ def _describe(error):
 
 
 def _check(instance, schema, label):
-    validator = Draft202012Validator(schema, registry=REGISTRY,
-                                     format_checker=Draft202012Validator.FORMAT_CHECKER)
+    validator = Draft202012Validator(schema, registry=REGISTRY, format_checker=Draft202012Validator.FORMAT_CHECKER)
     errors = sorted(validator.iter_errors(instance), key=lambda error: error.json_path)
     if errors:
         lines = [f"  {error.json_path}: {_describe(error)[:MESSAGE_LIMIT]}" for error in errors[:ERRORS_SHOWN]]

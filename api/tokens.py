@@ -1,4 +1,5 @@
 """Read JWTs without verifying them; the signing key belongs to the API."""
+
 import base64
 import json
 

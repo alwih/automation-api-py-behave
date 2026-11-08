@@ -28,8 +28,7 @@ def dummyjson_login(context):
     try:
         client = ApiClient(session, context.settings.dummyjson_base_url, context.settings.request_timeout)
         response = auth.login(client, *auth.credentials(context.settings))
-        assert response.status_code == 200, \
-            f"@authenticated login failed: {response.status_code} {response.text[:200]}"
+        assert response.status_code == 200, f"@authenticated login failed: {response.status_code} {response.text[:200]}"
         context.login = response.json()
         yield context.login
     finally:
@@ -59,8 +58,7 @@ def after_step(context, step):
         body = redact(response.text)
         if len(body) > BODY_LOG_LIMIT:
             body = f"{body[:BODY_LOG_LIMIT]}... ({len(body)} chars total)"
-        log.error("%s %s -> %s\n%s", response.request.method, response.request.url,
-                  response.status_code, body)
+        log.error("%s %s -> %s\n%s", response.request.method, response.request.url, response.status_code, body)
         # Untruncated request and response for the Allure report (ignored without -f allure)
         attach_exchange(response)
 

@@ -1,4 +1,5 @@
 """Turn Gherkin step input (placeholders, data tables) into request data."""
+
 import json
 import re
 
@@ -9,6 +10,7 @@ def resolve(text, saved):
         name = match.group(1)
         assert name in saved, f"Nothing saved as '{name}' yet; saved: {sorted(saved)}"
         return str(saved[name])
+
     return re.sub(r"\{(\w+)\}", saved_value, text)
 
 

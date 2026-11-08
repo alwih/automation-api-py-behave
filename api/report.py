@@ -1,4 +1,5 @@
 """Readable copies of a request and its response for the Allure report, with credentials hidden."""
+
 import json
 
 import allure
