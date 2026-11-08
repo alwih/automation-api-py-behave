@@ -1,9 +1,11 @@
 """Read JWTs without verifying them; the signing key belongs to the API."""
+
 import base64
 import json
+from typing import Any
 
 
-def decode_jwt(token):
+def decode_jwt(token: object) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return (header, payload) of a JWT, or raise ValueError if it isn't one."""
     parts = token.split(".") if isinstance(token, str) else []
     if len(parts) != 3:
@@ -17,12 +19,12 @@ def decode_jwt(token):
     return header, payload
 
 
-def tamper_signature(token):
+def tamper_signature(token: str) -> str:
     """Return the token with the first character of its signature changed."""
     header, payload, signature = token.split(".")
     first = "A" if signature[:1] != "A" else "B"
     return f"{header}.{payload}.{first}{signature[1:]}"
 
 
-def _b64url_decode(segment):
+def _b64url_decode(segment: str) -> bytes:
     return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))

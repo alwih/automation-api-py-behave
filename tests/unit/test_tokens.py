@@ -22,13 +22,16 @@ def test_decode_jwt_returns_header_and_payload():
     assert payload == {"id": 1, "iat": 100, "exp": 160}
 
 
-@pytest.mark.parametrize("token, reason", [
-    ("not.a.jwt", "not base64url JSON"),
-    ("only.two", "expected 3 dot-separated segments, got 2"),
-    (None, "expected 3 dot-separated segments, got 0"),
-    (f"{segment({'alg': 'HS256'})}.{segment(b'not json')}.sig", "not base64url JSON"),
-    (f"{segment({'alg': 'HS256'})}.{segment([1, 2])}.sig", "must be JSON objects"),
-])
+@pytest.mark.parametrize(
+    "token, reason",
+    [
+        ("not.a.jwt", "not base64url JSON"),
+        ("only.two", "expected 3 dot-separated segments, got 2"),
+        (None, "expected 3 dot-separated segments, got 0"),
+        (f"{segment({'alg': 'HS256'})}.{segment(b'not json')}.sig", "not base64url JSON"),
+        (f"{segment({'alg': 'HS256'})}.{segment([1, 2])}.sig", "must be JSON objects"),
+    ],
+)
 def test_decode_jwt_rejects_anything_that_is_not_a_jwt(token, reason):
     with pytest.raises(ValueError, match=reason):
         decode_jwt(token)
@@ -49,5 +52,5 @@ def test_tamper_signature_always_changes_the_first_character(signature, expected
 def test_jwt_lifetime_check_compares_exp_minus_iat():
     token = make_jwt({"iat": 1000, "exp": 1060})
     assertions.assert_jwt_lifetime(token, 60)
-    with pytest.raises(AssertionError, match="last 1800s .* but it lasts 60s"):
+    with pytest.raises(AssertionError, match=r"last 1800s .* but it lasts 60s"):
         assertions.assert_jwt_lifetime(token, 1800)

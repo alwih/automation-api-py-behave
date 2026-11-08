@@ -16,8 +16,9 @@ def make_response(body=b'{"message":"Invalid credentials"}', headers=None):
     response = requests.Response()
     response.status_code = 400
     response.reason = "Bad Request"
-    response.headers = CaseInsensitiveDict(headers or {"Content-Type": "application/json",
-                                                       "Set-Cookie": "accessToken=abc.def.ghi; Path=/"})
+    response.headers = CaseInsensitiveDict(
+        headers or {"Content-Type": "application/json", "Set-Cookie": "accessToken=abc.def.ghi; Path=/"}
+    )
     response._content = body
     response.request = make_request()
     return response

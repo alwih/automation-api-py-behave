@@ -1,7 +1,8 @@
 """Summarize behave's JUnit XML as Markdown for the GitHub Actions job summary.
 
-    python scripts/junit_summary.py reports/junit >> "$GITHUB_STEP_SUMMARY"
+python scripts/junit_summary.py reports/junit >> "$GITHUB_STEP_SUMMARY"
 """
+
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -51,19 +52,32 @@ def summarize(directory):
 
     total = [sum(row[i] for row in rows) for i in range(1, 5)]
     heading = f"### Scenarios: {total[0]} passed, {total[1]} failed"
-    lines = [heading + (f", {total[2]} not run" if total[2] else ""), "",
-             "| Feature | Passed | Failed | Not run | Time |", "|---|---:|---:|---:|---:|"]
-    lines += [f"| `{name}` | {passed} | {failed} | {not_run} | {seconds:.1f} s |"
-              for name, passed, failed, not_run, seconds in rows]
+    lines = [
+        heading + (f", {total[2]} not run" if total[2] else ""),
+        "",
+        "| Feature | Passed | Failed | Not run | Time |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    lines += [
+        f"| `{name}` | {passed} | {failed} | {not_run} | {seconds:.1f} s |"
+        for name, passed, failed, not_run, seconds in rows
+    ]
     lines.append("| **Total** | **{}** | **{}** | **{}** | **{:.1f} s** |".format(*total))
 
     if failures:
         lines += ["", "#### Failed scenarios", "", "| Scenario | Location | Message |", "|---|---|---|"]
-        lines += [f"| {_cell(name)} | `{location}` | {_cell(message)} |" if location else
-                  f"| {_cell(name)} | | {_cell(message)} |" for name, location, message in failures]
+        lines += [
+            f"| {_cell(name)} | `{location}` | {_cell(message)} |"
+            if location
+            else f"| {_cell(name)} | | {_cell(message)} |"
+            for name, location, message in failures
+        ]
     if total[2]:
-        lines += ["", "Scenarios that did not run were usually stopped by a failing hook, "
-                      "such as the `@authenticated` login; the job log shows the error."]
+        lines += [
+            "",
+            "Scenarios that did not run were usually stopped by a failing hook, "
+            "such as the `@authenticated` login; the job log shows the error.",
+        ]
     return "\n".join(lines) + "\n"
 
 

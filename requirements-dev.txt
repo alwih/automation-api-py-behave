@@ -1,0 +1,8 @@
+# Runtime and test dependencies, plus the lint and type-check tools
+-r requirements.txt
+ruff==0.17.4
+mypy==2.4.1
+pre-commit==4.7.0
+# Type information for the libraries that don't ship their own
+types-requests==2.33.0.20261030
+types-jsonschema==4.26.0.20261006

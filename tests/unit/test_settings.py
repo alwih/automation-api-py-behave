@@ -6,8 +6,9 @@ from config.settings import load_settings
 @pytest.fixture
 def env_file(tmp_path):
     path = tmp_path / ".env"
-    path.write_text("REQUEST_TIMEOUT=3\nDUMMYJSON_USERNAME=from_file\nDUMMYJSON_PASSWORD=secret\n"
-                    "JSONPLACEHOLDER_BASE_URL=\n")
+    path.write_text(
+        "REQUEST_TIMEOUT=3\nDUMMYJSON_USERNAME=from_file\nDUMMYJSON_PASSWORD=secret\nJSONPLACEHOLDER_BASE_URL=\n"
+    )
     return path
 
 
@@ -37,16 +38,20 @@ def test_behave_userdata_beats_environment(env_file):
 
 
 def test_whitespace_only_values_count_as_unset(tmp_path):
-    settings = load_settings(userdata={"REQUEST_TIMEOUT": "   "}, environ={"REQUEST_TIMEOUT": " 6 "},
-                             env_file=tmp_path / "missing.env")
+    settings = load_settings(
+        userdata={"REQUEST_TIMEOUT": "   "}, environ={"REQUEST_TIMEOUT": " 6 "}, env_file=tmp_path / "missing.env"
+    )
     assert settings.request_timeout == 6.0
 
 
-@pytest.mark.parametrize("raw, message", [
-    ("abc", "must be a number of seconds"),
-    ("0", "must be greater than 0"),
-    ("-1", "must be greater than 0"),
-])
+@pytest.mark.parametrize(
+    "raw, message",
+    [
+        ("abc", "must be a number of seconds"),
+        ("0", "must be greater than 0"),
+        ("-1", "must be greater than 0"),
+    ],
+)
 def test_invalid_timeout_is_rejected(tmp_path, raw, message):
     with pytest.raises(ValueError, match=message):
         load_settings(environ={"REQUEST_TIMEOUT": raw}, env_file=tmp_path / "missing.env")
